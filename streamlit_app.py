@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-from bokeh.plotting import figure
+
 
 st.title('🤖 Machine Learning App 🤖')
 
@@ -15,5 +15,5 @@ with st.expander('Data'):
 
 with st.expander('Data visualization'):
   st.write("### Distribution of pEC50")
-  st.bokeh_chart(data = df, x = 'pEC50')
+  st.bar_chart(data = df, x = 'pEC50')
 
