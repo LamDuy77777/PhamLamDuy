@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
+import plotly.express as px
 st.title('🤖 Machine Learning App 🤖')
 
 st.info('This app will help you predict the pEC50 of apelin receptor agonists.')
@@ -13,5 +14,7 @@ with st.expander('Data'):
 
 with st.expander('Data visualization'):
   st.write("### Distribution of pEC50")
-  st.bar_chart(data = df, x = 'pEC50')
+  fig = px.histogram(df, x='pEC50', nbins=15, title="Distribution of pEC50", color_discrete_sequence=['skyblue'])
+  fig.update_layout(xaxis_title="pEC50", yaxis_title="Frequency")
+  st.plotly_chart(fig)
 
