@@ -14,5 +14,5 @@ with st.expander('Data'):
 
 with st.expander('Data visualization'):
   st.write("### Distribution of pEC50")
-  st.area_chart(data = df, x = 'pEC50')
+  st.bokeh_chart(data = df, x = 'pEC50')
 
