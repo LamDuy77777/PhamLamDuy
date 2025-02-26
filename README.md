@@ -1,4 +1,4 @@
-# 🤖Machine Learning Apelin🤖
+# 🤖 Machine Learning Apelin 🤖
 This is a machine-learning app for predicting pEC50 substance agonist apelin receptor
 
 ## Demo App
