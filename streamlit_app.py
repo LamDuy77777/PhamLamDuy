@@ -13,5 +13,5 @@ with st.expander('Data'):
   df
 
 with st.expander('Data visualization'):
-  chart_data = pd.DataFrame(data = df, x = 'pEC50', y = 'Frequency')
+  chart_data = pd.DataFrame(data = df['pEC50'], x = 'pEC50', y = 'Frequency')
   st.bar_chart(chart_data)
