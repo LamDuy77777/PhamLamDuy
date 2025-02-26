@@ -14,7 +14,6 @@ with st.expander('Data'):
 
 with st.expander('Data visualization'):
   st.write("### Distribution of pEC50")
-  fig, ax = plt.subplots(figsize=(10, 6))
   sns.histplot(data=df, x='pEC50', bins=15, kde=True, color='skyblue', edgecolor='black', ax=ax)
   ax.set_xlabel("pEC50")
   ax.set_ylabel("Frequency")
