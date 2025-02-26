@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-
+import seaborn as sns
 st.title('🤖 Machine Learning App 🤖')
 
 st.info('This app will help you predict the pEC50 of apelin receptor agonists.')
