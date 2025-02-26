@@ -13,6 +13,5 @@ with st.expander('Data'):
 
 with st.expander('Data visualization'):
   st.write("### Distribution of pEC50")
-  chart_data = pd.DataFrame(data = df, x = 'pEC50')
-  st.bar_chart(chart_data)
+  st.bar_chart(data = df, x = 'pEC50')
 
