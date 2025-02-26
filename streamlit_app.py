@@ -13,5 +13,10 @@ with st.expander('Data'):
   df
 
 with st.expander('Data visualization'):
-  chart_data = pd.DataFrame(data = df['pEC50'])
-  st.bar_chart(chart_data)
+  st.write("### Distribution of pEC50")
+  fig, ax = plt.subplots(figsize=(10, 6))
+  sns.histplot(data=df, x='pEC50', bins=15, kde=True, color='skyblue', edgecolor='black', ax=ax)
+  ax.set_xlabel("pEC50")
+  ax.set_ylabel("Frequency")
+  ax.set_title("Distribution of pEC50")
+  st.pyplot(fig)
