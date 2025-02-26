@@ -16,4 +16,6 @@ with st.expander('Data'):
 with st.expander('Data visualization'):
   st.write("### Distribution of pEC50")
 
-
+#Data preparations
+with st.sidebar: 
+  st.header('Input features')
