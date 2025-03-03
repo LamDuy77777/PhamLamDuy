@@ -38,7 +38,7 @@ def smiles_to_ecfp4(smiles, radius=2, nBits=2048):
 # Tải mô hình học máy đã huấn luyện từ file trên GitHub
 try:
     # Giả sử file 'model.pkl' đã được tải lên repository của bạn
-    with open('model.pkl', 'rb') as file:
+    with open('https://raw.githubusercontent.com/LamDuy77777/data/refs/heads/main/xgboost_model.pkl', 'rb') as file:
         model = pickle.load(file)
 except FileNotFoundError:
     st.error("Không tìm thấy file mô hình 'model.pkl'. Vui lòng tải file lên repository.")
