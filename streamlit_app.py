@@ -4,6 +4,8 @@ import numpy as np
 from rdkit import Chem
 from rdkit.Chem import AllChem
 import pickle
+import requests
+from io import BytesIO
 
 # Tiêu đề và giới thiệu
 st.title('🤖 Machine Learning App for pEC50 Prediction 🤖')
@@ -35,13 +37,15 @@ def smiles_to_ecfp4(smiles, radius=2, nBits=2048):
     fp = AllChem.GetMorganFingerprintAsBitVect(mol, radius, nBits=nBits)
     return np.array(fp)
 
-# Tải mô hình học máy đã huấn luyện từ file trên GitHub
-try:
-    # Giả sử file 'model.pkl' đã được tải lên repository của bạn
-    with open('https://raw.githubusercontent.com/LamDuy77777/data/refs/heads/main/xgboost_model.pkl', 'rb') as file:
-        model = pickle.load(file)
-except FileNotFoundError:
-    st.error("Không tìm thấy file mô hình 'model.pkl'. Vui lòng tải file lên repository.")
+# Tải mô hình học máy từ URL trên GitHub
+model_url = 'https://raw.githubusercontent.com/LamDuy77777/data/refs/heads/main/xgboost_model.pkl'
+response = requests.get(model_url)
+
+if response.status_code == 200:
+    model_file = BytesIO(response.content)
+    model = pickle.load(model_file)
+else:
+    st.error("Không thể tải file mô hình từ GitHub. Vui lòng kiểm tra URL hoặc kết nối mạng.")
     st.stop()
 
 # Logic dự đoán
