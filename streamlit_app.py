@@ -40,6 +40,9 @@ def smiles_to_ecfp4(smiles, radius=2, nBits=2048):
 # Tải mô hình học máy từ URL trên GitHub
 model_url = 'https://raw.githubusercontent.com/LamDuy77777/data/refs/heads/main/xgboost_model.pkl'
 response = requests.get(model_url)
+import pickle
+with open('xgboost_model.pkl', 'rb') as file:
+    model = pickle.load(file)
 
 if response.status_code == 200:
     model_file = BytesIO(response.content)
