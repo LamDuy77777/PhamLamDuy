@@ -1,68 +1,36 @@
 import streamlit as st
-import pandas as pd
-import numpy as np
-from rdkit import Chem
-from rdkit.Chem import AllChem
-import pickle
-import requests
-from io import BytesIO
 
-# Tiêu đề và giới thiệu
-st.title('🤖 Machine Learning App for pEC50 Prediction 🤖')
-st.info('Ứng dụng này giúp bạn dự đoán pEC50 của các chất chủ vận thụ thể apelin bằng kỹ thuật học máy tiên tiến.')
+# Khởi tạo session_state để theo dõi trang hiện tại
+if 'page' not in st.session_state:
+    st.session_state.page = 'Giới thiệu'
 
-# Phần dữ liệu
-st.write('### Dữ liệu dùng để xây dựng mô hình')
-with st.expander('Dữ liệu đã chuẩn hóa'):
-    st.write('#### Dữ liệu Apelin đã chuẩn hóa')
-    df = pd.read_csv('https://raw.githubusercontent.com/LamDuy77777/data/refs/heads/main/Apelin_1715.csv')
-    st.dataframe(df)
+# Tạo ba nút chuyển trang ở đầu trang bằng cách dùng columns
+col1, col2, col3 = st.columns(3)
+with col1:
+    if st.button("Giới thiệu"):
+        st.session_state.page = 'Giới thiệu'
+with col2:
+    if st.button("Chuẩn hóa SMILES"):
+        st.session_state.page = 'Chuẩn hóa SMILES'
+with col3:
+    if st.button("Tải mô hình"):
+        st.session_state.page = 'Tải mô hình'
 
-# Phần trực quan hóa dữ liệu
-with st.expander('Trực quan hóa dữ liệu'):
-    st.write("### Phân bố của pEC50")
-    st.bar_chart(df['pEC50'])  # Giả sử cột 'pEC50' có trong dữ liệu
+# Hiển thị nội dung dựa trên trang hiện tại
+if st.session_state.page == 'Giới thiệu':
+    st.title("Trang Giới thiệu")
+    st.write("Chào mừng bạn đến với ứng dụng của tôi! Đây là nơi để giới thiệu về dự án và các chức năng chính.")
+    st.write("Sử dụng các nút ở trên để chuyển sang các trang khác.")
 
-# Thanh bên để nhập dữ liệu
-st.sidebar.header('Nhập thông tin')
-st.sidebar.write('Nhập chuỗi SMILES của hợp chất để dự đoán pEC50.')
-smiles_input = st.sidebar.text_input('SMILES', '')
-predict_button = st.sidebar.button('Dự đoán pEC50')
-
-# Hàm chuyển đổi SMILES thành ECFP4
-def smiles_to_ecfp4(smiles, radius=2, nBits=2048):
-    mol = Chem.MolFromSmiles(smiles)
-    if mol is None:
-        return None
-    fp = AllChem.GetMorganFingerprintAsBitVect(mol, radius, nBits=nBits)
-    return np.array(fp)
-
-# Tải mô hình học máy từ URL trên GitHub
-model_url = 'https://raw.githubusercontent.com/LamDuy77777/data/refs/heads/main/xgboost_model.pkl'
-response = requests.get(model_url)
-import pickle
-with open('xgboost_model.pkl', 'rb') as file:
-    model = pickle.load(file)
-
-if response.status_code == 200:
-    model_file = BytesIO(response.content)
-    model = pickle.load(model_file)
-else:
-    st.error("Không thể tải file mô hình từ GitHub. Vui lòng kiểm tra URL hoặc kết nối mạng.")
-    st.stop()
-
-# Logic dự đoán
-if predict_button:
+elif st.session_state.page == 'Chuẩn hóa SMILES':
+    st.title("Trang Chuẩn hóa SMILES")
+    st.write("Tại đây, bạn có thể nhập chuỗi SMILES và chuẩn hóa nó.")
+    smiles_input = st.text_input("Nhập chuỗi SMILES")
     if smiles_input:
-        ecfp4 = smiles_to_ecfp4(smiles_input)
-        if ecfp4 is not None:
-            prediction = model.predict([ecfp4])
-            st.success(f'pEC50 dự đoán: **{prediction[0]:.3f}**')
-        else:
-            st.error('Chuỗi SMILES không hợp lệ. Vui lòng kiểm tra và thử lại.')
-    else:
-        st.warning('Vui lòng nhập chuỗi SMILES để tiếp tục.')
+        # Giả sử bạn sẽ thêm hàm chuẩn hóa thực tế sau
+        st.write(f"Chuỗi SMILES đã chuẩn hóa: {smiles_input}")  # Thay bằng hàm thực tế nếu có
 
-# Thông tin bổ sung
-st.write('### Cách hoạt động')
-st.write('Từ các chuỗi SMILES đã chuẩn hóa, ứng dụng này tính toán dấu vân tay ECFP4 (2048 bit) và sử dụng mô hình học máy đã được huấn luyện sẵn để dự đoán giá trị pEC50.')
+elif st.session_state.page == 'Tải mô hình':
+    st.title("Trang Tải Mô hình")
+    st.write("Tại đây, bạn có thể tải và xem thông tin về mô hình đã huấn luyện.")
+    st.write("Chức năng tải mô hình sẽ được thêm sau khi bạn cung cấp chi tiết cụ thể.")
