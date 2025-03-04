@@ -34,6 +34,27 @@ if st.session_state.page == 'Giới thiệu':
     
 
 elif st.session_state.page == 'Chuẩn hóa SMILES':
+    # Tiêu đề ứng dụng
+st.title("Tải file lên với Streamlit")
+
+# Tạo ô browse file
+uploaded_file = st.file_uploader("Chọn một file để tải lên", type=["txt", "csv", "pdf"])
+
+# Xử lý file sau khi được tải lên
+if uploaded_file is not None:
+    # Hiển thị thông tin file
+    st.write("Tên file:", uploaded_file.name)
+    st.write("Kích thước file:", uploaded_file.size, "bytes")
+    
+    # Đọc nội dung file (ví dụ với file text)
+    if uploaded_file.type == "text/plain":
+        content = uploaded_file.read().decode("utf-8")
+        st.write("Nội dung file:")
+        st.text(content)
+    else:
+        st.write("File đã được tải lên, nhưng chưa xử lý nội dung.")
+else:
+    st.write("Vui lòng tải lên một file!")
     st.title("Trang Chuẩn hóa SMILES")
     st.write("Tại đây, bạn có thể nhập chuỗi SMILES và chuẩn hóa nó.")
     smiles_input = st.text_input("Nhập chuỗi SMILES")
