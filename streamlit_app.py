@@ -2,7 +2,7 @@ import streamlit as st
 
 # Khởi tạo session_state để theo dõi trang hiện tại
 if 'page' not in st.session_state:
-    st.session_state.page = '▢Giới thiệu'
+    st.session_state.page = 'Giới thiệu'
 
 # Tạo ba nút chuyển trang ở đầu trang bằng cách dùng columns
 col1, col2, col3 = st.columns(3)
@@ -21,6 +21,9 @@ if st.session_state.page == 'Giới thiệu':
     st.title("Trang Giới thiệu")
     st.write("Chào mừng bạn đến với ứng dụng của tôi! Đây là nơi để giới thiệu về dự án và các chức năng chính.")
     st.write("Sử dụng các nút ở trên để chuyển sang các trang khác.")
+    st.write("Sử dụng st.selectbox để tạo hộp chọn")
+    st.selectbox("Chọn cái gì đây",("cá", "thỏ", "gà")
+    
 
 elif st.session_state.page == 'Chuẩn hóa SMILES':
     st.title("Trang Chuẩn hóa SMILES")
