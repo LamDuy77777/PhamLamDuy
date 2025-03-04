@@ -21,8 +21,10 @@ if st.session_state.page == 'Giới thiệu':
     st.title("Trang Giới thiệu")
     st.write("Chào mừng bạn đến với ứng dụng của tôi! Đây là nơi để giới thiệu về dự án và các chức năng chính.")
     st.write("Sử dụng các nút ở trên để chuyển sang các trang khác.")
-    st.write("Sử dụng st.selectbox để tạo hộp chọn")
+    st.header("Sử dụng st.selectbox để tạo hộp chọn")
     st.selectbox("Chọn cái gì đây",("cá", "thỏ", "gà"))
+    st.header("Sử dụng st.multiselect để tạo hộp multiselect")
+    st.multiselect("Thích con gì dzay?", ["cá", "gà", "thỏ"])
     
 
 elif st.session_state.page == 'Chuẩn hóa SMILES':
