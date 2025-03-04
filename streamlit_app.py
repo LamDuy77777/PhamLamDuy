@@ -25,6 +25,7 @@ if st.session_state.page == 'Giới thiệu':
     st.selectbox("Chọn cái gì đây",("cá", "thỏ", "gà"))
     st.header("Sử dụng st.multiselect để tạo hộp multiselect")
     st.multiselect("Thích con gì dzay?", ["cá", "gà", "thỏ"])
+    st.sidebar.header("Option")
     
 
 elif st.session_state.page == 'Chuẩn hóa SMILES':
