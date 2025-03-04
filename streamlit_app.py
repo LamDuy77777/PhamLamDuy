@@ -24,12 +24,13 @@ if st.session_state.page == 'Giới thiệu':
     st.header("Sử dụng st.selectbox để tạo hộp chọn")
     color = st.selectbox("Em thích màu gì",("đen", "trắng", "xanh dương", "tím nhạt"))
     button = st.button("Submit answer")
+    st.form_submit_button(label="Browse file", help=None, on_click=None, args=None, kwargs=None, *, type="secondary", icon="🚨", disabled=False, use_container_width=False)
     if button:
         st.write(color)
     st.header("Sử dụng st.multiselect để tạo hộp multiselect")
     st.multiselect("Thích con gì dzay?", ["cá", "gà", "thỏ"])
     st.sidebar.header("Option")
-    st.form_submit_button(label="Browse file", help=None, on_click=None, args=None, kwargs=None, *, type="secondary", icon="🚨", disabled=False, use_container_width=False)
+    
     
 
 elif st.session_state.page == 'Chuẩn hóa SMILES':
