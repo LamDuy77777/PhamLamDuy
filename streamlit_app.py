@@ -22,7 +22,10 @@ if st.session_state.page == 'Giới thiệu':
     st.write("Chào mừng bạn đến với ứng dụng của tôi! Đây là nơi để giới thiệu về dự án và các chức năng chính.")
     st.write("Sử dụng các nút ở trên để chuyển sang các trang khác.")
     st.header("Sử dụng st.selectbox để tạo hộp chọn")
-    st.selectbox("Chọn cái gì đây",("cá", "thỏ", "gà"))
+    color = st.selectbox("Em thích màu gì",("đen", "trắng", "xanh dương", "tím nhạt"))
+    button = st.button("Submit answer")
+    if button:
+        st.write(color)
     st.header("Sử dụng st.multiselect để tạo hộp multiselect")
     st.multiselect("Thích con gì dzay?", ["cá", "gà", "thỏ"])
     st.sidebar.header("Option")
