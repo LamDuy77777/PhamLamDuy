@@ -2,7 +2,7 @@ import streamlit as st
 
 # Khởi tạo session_state để theo dõi trang hiện tại
 if 'page' not in st.session_state:
-    st.session_state.page = 'Giới thiệu'
+    st.session_state.page = '▢Giới thiệu'
 
 # Tạo ba nút chuyển trang ở đầu trang bằng cách dùng columns
 col1, col2, col3 = st.columns(3)
