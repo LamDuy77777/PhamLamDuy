@@ -47,9 +47,9 @@ elif st.session_state.page == 'Chuẩn hóa SMILES':
     
         # Đọc nội dung file (ví dụ với file text)
         if uploaded_file.type == "text/plain":
-        content = uploaded_file.read().decode("utf-8")
-        st.write("Nội dung file:")
-        st.text(content)
+            content = uploaded_file.read().decode("utf-8")
+            st.write("Nội dung file:")
+            st.text(content)
         else:
         st.write("File đã được tải lên, nhưng chưa xử lý nội dung.")
     else:
