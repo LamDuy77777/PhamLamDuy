@@ -51,9 +51,9 @@ elif st.session_state.page == 'Chuẩn hóa SMILES':
             st.write("Nội dung file:")
             st.text(content)
         else:
-        st.write("File đã được tải lên, nhưng chưa xử lý nội dung.")
+            st.write("File đã được tải lên, nhưng chưa xử lý nội dung.")
     else:
-    st.write("Vui lòng tải lên một file!")
+        st.write("Vui lòng tải lên một file!")
 elif st.session_state.page == 'Tải mô hình':
     st.title("Trang Tải Mô hình")
     st.write("Tại đây, bạn có thể tải và xem thông tin về mô hình đã huấn luyện.")
