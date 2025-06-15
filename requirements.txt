@@ -7,4 +7,4 @@ tqdm
 xgboost
 chemprop
 torch
-torch-geometric
+torch_geometric
