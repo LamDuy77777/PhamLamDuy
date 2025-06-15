@@ -130,8 +130,18 @@ def load_model():
         mlp_layers=best_params['mlp_layers'],
         pooling_method=best_params['pooling_method']
     ).to(device)
-    # Sử dụng torch.load với map_location để đảm bảo tải đúng thiết bị
-    state_dict = torch.load('GIN_597_562 (1).pkl', map_location=device)
+    try:
+        # Thử tải bằng torch.load
+        state_dict = torch.load('GIN_597_562 (1).pkl', map_location=device)
+    except Exception as e:
+        st.error(f"Lỗi khi tải tệp bằng torch.load: {str(e)}")
+        # Nếu torch.load thất bại, thử pickle.load
+        try:
+            with open('GIN_597_562 (1).pkl', 'rb') as f:
+                state_dict = pickle.load(f)
+        except Exception as e2:
+            st.error(f"Lỗi khi tải tệp bằng pickle.load: {str(e2)}")
+            raise RuntimeError("Không thể tải tệp GIN_597_562 (1).pkl. Vui lòng kiểm tra tệp.")
     model.load_state_dict(state_dict)
     model.eval()
     return model
