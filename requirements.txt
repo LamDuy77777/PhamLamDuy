@@ -4,3 +4,4 @@ numpy
 rdkit
 scikit-learn
 tqdm
+xgboost
