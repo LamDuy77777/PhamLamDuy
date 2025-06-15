@@ -1,3 +1,4 @@
+```python
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -268,67 +269,11 @@ class MyDataset(Dataset):
     def __len__(self):
         return len(self.X)
 
-# Custom CSS for styling
+# Custom CSS for background color
 st.markdown("""
     <style>
-    @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;700&display=swap');
-    
-    .main {
-        background: #e6f4e6;
-        font-family: 'Roboto', sans-serif;
-        padding: 20px;
-    }
-    .stButton>button {
-        background-color: #20c997;
-        color: white;
-        border-radius: 10px;
-        padding: 12px 24px;
-        font-size: 16px;
-        font-weight: 700;
-        transition: background-color 0.3s ease;
-        border: none;
-    }
-    .stButton>button:hover {
-        background-color: #17a589;
-    }
-    .stTextInput>div>input, .stTextArea>div>textarea {
-        border: 1px solid #b0bec5;
-        border-radius: 8px;
-        padding: 10px;
-        font-size: 14px;
-        background-color: #ffffff;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-    }
-    .stRadio>div {
-        background-color: #ffffff;
-        padding: 15px;
-        border-radius: 8px;
-        box-shadow: 0 2px 6px rgba(0,0,0,0.1);
-        margin-bottom: 20px;
-    }
-    .stFileUploader>div {
-        border: 2px dashed #20c997;
-        border-radius: 8px;
-        padding: 15px;
-        background-color: #f8fafc;
-    }
-    h1 {
-        color: #000080;
-        font-weight: 700;
-    }
-    h2, h3 {
-        color: #2c3e50;
-        font-weight: 700;
-    }
-    .stDataFrame {
-        border: 1px solid #b0bec5;
-        border-radius: 8px;
-        box-shadow: 0 2px 6px rgba(0,0,0,0.1);
-        background-color: #ffffff;
-    }
-    .stMarkdown {
-        line-height: 1.6;
-        color: #34495e;
+    .stApp {
+        background-color: #e6f4e6;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -454,3 +399,4 @@ if st.button("Run Prediction"):
                 file_name="predictions.csv",
                 mime="text/csv"
             )
+```
