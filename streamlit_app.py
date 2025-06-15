@@ -273,4 +273,93 @@ st.title("Prediction with XGBoost and GIN Models (Including Applicability Domain
 
 st.write("""
 This application uses the XGBoost model to classify SMILES (0 or 1) and the GIN model to predict pEC50 values for all valid SMILES.
-The results include the Applicability Domain (AD) with an SDC threshold of 7.019561595570336e-06
+The results include the Applicability Domain (AD) with an SDC threshold of 7.019561595570336e-06, classifying predictions as "Reliable" or "Unreliable".
+You can enter SMILES manually or upload a CSV file containing SMILES.
+""")
+
+# Input section
+input_type = st.radio("Choose input method:", ("Manual Entry", "Upload CSV"))
+
+if input_type == "Manual Entry":
+    smiles_input = st.text_area("Enter SMILES (one per line):")
+    smiles_list = [s.strip() for s in smiles_input.split('\n') if s.strip()]
+else:
+    column_name = st.text_input("Enter the column name for SMILES in CSV:", "SMILES")
+    uploaded_file = st.file_uploader("Upload CSV file", type="csv")
+    if uploaded_file:
+        df = pd.read_csv(uploaded_file)
+        if column_name in df.columns:
+            smiles_list = df[column_name].tolist()
+        else:
+            st.error(f"Column '{column_name}' not found in the CSV file.")
+            st.stop()
+
+# Predict button
+if st.button("Predict"):
+    if not smiles_list:
+        st.write("Please provide SMILES input.")
+    else:
+        with st.spinner("Standardizing SMILES..."):
+            standardized_smiles = standardize_smiles(smiles_list)
+
+        # Classify valid and invalid SMILES
+        valid_pairs = [(orig, std) for orig, std in zip(smiles_list, standardized_smiles) if std is not None]
+        invalid_smiles = [smiles_list[i] for i, smi in enumerate(standardized_smiles) if smi is None]
+
+        if invalid_smiles:
+            st.write("The following SMILES are invalid and cannot be processed:")
+            for smi in invalid_smiles:
+                st.write(smi)
+
+        if not valid_pairs:
+            st.write("All input SMILES are invalid. Unable to perform prediction.")
+        else:
+            valid_orig, valid_std = zip(*valid_pairs)
+
+            # XGBoost classification prediction
+            with st.spinner("Performing classification prediction with XGBoost..."):
+                xgb_features = [smiles_to_features(smi) for smi in valid_std]
+                xgb_model = load_xgb_model()
+                xgb_predictions = xgb_model.predict(np.array(xgb_features))
+
+            # Calculate SDC for AD
+            with st.spinner("Calculating Applicability Domain (SDC)..."):
+                ad_model = load_ad_model()
+                sdc_scores = [ad_model.get_score(smi) for smi in valid_std]
+                ad_labels = ["Reliable" if score >= 7.019561595570336e-06 else "Unreliable" for score in sdc_scores]
+
+            # GIN pEC50 prediction for all valid SMILES
+            with st.spinner("Converting to graph data for GIN..."):
+                dataset = MyDataset(valid_std)
+                dataloader = DataLoader(dataset, batch_size=32, shuffle=False)
+
+            with st.spinner("Performing pEC50 prediction with GIN..."):
+                gin_model = load_gin_model()
+                gin_predictions = []
+                for batch in dataloader:
+                    batch = batch.to(device)
+                    with torch.no_grad():
+                        pred = gin_model(batch.x, batch.edge_index, batch.edge_attr, batch.batch)
+                    gin_predictions.extend(pred.cpu().numpy().flatten())
+
+            # Create result DataFrame
+            result_df = pd.DataFrame({
+                'Original SMILES': valid_orig,
+                'Standardized SMILES': valid_std,
+                'XGBoost Prediction': xgb_predictions,
+                'GIN pEC50 Prediction': gin_predictions,
+                'Applicability Domain': ad_labels
+            })
+
+            # Display results
+            st.write("Prediction results for all valid SMILES:")
+            st.dataframe(result_df)
+
+            # Download button for results
+            csv = result_df.to_csv(index=False)
+            st.download_button(
+                label="Download results as CSV",
+                data=csv,
+                file_name="prediction_results.csv",
+                mime="text/csv"
+            )
