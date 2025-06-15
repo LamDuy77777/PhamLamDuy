@@ -1,7 +1,11 @@
 import streamlit as st
 import pickle
 from rdkit import Chem
-from rdkit.Chem import rdMolStandardize
+from rdkit.Chem import AllChem
+from rdkit.Chem.MolStandardize import rdMolStandardize
+from rdkit.Chem import Draw
+from rdkit import Chem, RDLogger
+
 
 # Hàm tải mô hình
 def load_classification_model():
