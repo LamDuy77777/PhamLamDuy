@@ -3,7 +3,6 @@ import pandas as pd
 import numpy as np
 from rdkit import Chem
 from rdkit.Chem import AllChem
-from rdkit.Chem import Draw
 from rdkit.Chem.MolStandardize import rdMolStandardize
 from rdkit import RDLogger
 from tqdm import tqdm
@@ -18,9 +17,6 @@ import torch.nn.functional as F
 from torch_geometric.nn import GINEConv, global_add_pool, global_mean_pool, global_max_pool
 import random
 from rdkit import DataStructs
-from PIL import Image
-import base64
-import io
 
 # Set seed for reproducibility
 def set_seed(seed):
@@ -39,20 +35,6 @@ RDLogger.DisableLog('rdApp.*')
 
 # Define device
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
-# Function to convert SMILES to base64 image for 2D structure
-def smiles_to_image_base64(smiles, size=(200, 200)):
-    try:
-        mol = Chem.MolFromSmiles(smiles)
-        if mol is None:
-            return ""
-        img = Draw.MolToImage(mol, size=size)
-        buffered = io.BytesIO()
-        img.save(buffered, format="PNG")
-        img_str = base64.b64encode(buffered.getvalue()).decode("utf-8")
-        return f'<img src="data:image/png;base64,{img_str}" width="200"/>'
-    except:
-        return ""
 
 # Function to standardize SMILES
 def standardize_smiles(batch):
@@ -290,10 +272,10 @@ class MyDataset(Dataset):
 st.markdown("""
     <style>
     .stApp {
-        background-color: #ADD8E6;
+        background-color: #e6f0fa; /* Light blue background */
     }
-    h1, h2, h3 {
-        color: #000080;
+    h1, h2 {
+        color: #000080; /* Navy blue for titles */
     }
     </style>
 """, unsafe_allow_html=True)
@@ -397,11 +379,10 @@ if st.button("Run Prediction"):
                         pred = gin_model(batch.x, batch.edge_index, batch.edge_attr, batch.batch)
                     gin_predictions.extend(pred.cpu().numpy().flatten())
 
-            # Create results DataFrame with Molecule column
+            # Create results DataFrame
             result_df = pd.DataFrame({
                 'Original SMILES': valid_orig,
                 'Standardized SMILES': valid_std,
-                'Molecule': [smiles_to_image_base64(smi) for smi in valid_std],
                 'XGBoost Prediction': xgb_predictions,
                 'pEC50 Prediction (GIN)': gin_predictions,
                 'Applicability Domain': ad_labels
@@ -409,11 +390,11 @@ if st.button("Run Prediction"):
 
             # Display results
             st.subheader("Prediction Results")
-            st.markdown("Results for all valid SMILES (Molecule column shows 2D structures):")
-            st.markdown(result_df.to_html(escape=False, index=False), unsafe_allow_html=True)
+            st.markdown("Results for all valid SMILES:")
+            st.dataframe(result_df)
 
             # Download results button
-            csv = result_df.drop(columns=['Molecule']).to_csv(index=False)
+            csv = result_df.to_csv(index=False)
             st.download_button(
                 label="Download Results as CSV",
                 data=csv,
