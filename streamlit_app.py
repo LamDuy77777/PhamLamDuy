@@ -6,7 +6,7 @@ import pickle
 # Tải mô hình với caching
 @st.cache_resource
 def load_classification_model():
-    with open('classification_model.pkl', 'rb') as f:
+    with open('xgboost_binary_10nM.pkl', 'rb') as f:
         model = pickle.load(f)
     return model
 
