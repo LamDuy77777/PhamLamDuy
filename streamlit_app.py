@@ -268,11 +268,14 @@ class MyDataset(Dataset):
     def __len__(self):
         return len(self.X)
 
-# Custom CSS for background color
+# Custom CSS for background color and title color
 st.markdown("""
     <style>
     .stApp {
-        background-color: #e6f4e6;
+        background-color: #e6f0fa;
+    }
+    h1, h2, h3 {
+        color: #000080;
     }
     </style>
 """, unsafe_allow_html=True)
