@@ -272,7 +272,7 @@ class MyDataset(Dataset):
 st.markdown("""
     <style>
     .stApp {
-        background-color: #ADD8E6;
+        background-color: e6f0fa;
     }
     h1, h2, h3 {
         color: #000080;
