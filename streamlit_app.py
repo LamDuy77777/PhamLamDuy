@@ -271,76 +271,84 @@ class MyDataset(Dataset):
 # Custom CSS for styling
 st.markdown("""
     <style>
+    @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;700&display=swap');
+    
     .main {
-        background-color: #f4f7fa;
-        font-family: 'Arial', sans-serif;
+        background: linear-gradient(to bottom, #e6f3fa, #ffffff);
+        font-family: 'Roboto', sans-serif;
+        padding: 20px;
     }
     .stButton>button {
-        background-color: #007bff;
+        background-color: #20c997;
         color: white;
-        border-radius: 8px;
-        padding: 10px 20px;
+        border-radius: 10px;
+        padding: 12px 24px;
         font-size: 16px;
-        font-weight: bold;
-        transition: background-color 0.3s;
+        font-weight: 700;
+        transition: background-color 0.3s ease;
+        border: none;
     }
     .stButton>button:hover {
-        background-color: #0056b3;
+        background-color: #17a589;
     }
     .stTextInput>div>input, .stTextArea>div>textarea {
-        border: 1px solid #ced4da;
-        border-radius: 5px;
-        padding: 8px;
+        border: 1px solid #b0bec5;
+        border-radius: 8px;
+        padding: 10px;
         font-size: 14px;
+        background-color: #ffffff;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
     }
     .stRadio>div {
         background-color: #ffffff;
-        padding: 10px;
-        border-radius: 5px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        padding: 15px;
+        border-radius: 8px;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+        margin-bottom: 20px;
     }
     .stFileUploader>div {
-        border: 1px dashed #007bff;
-        border-radius: 5px;
-        padding: 10px;
+        border: 2px dashed #20c997;
+        border-radius: 8px;
+        padding: 15px;
+        background-color: #f8fafc;
     }
     h1, h2, h3 {
-        color: #343a40;
-    }
-    .sidebar .sidebar-content {
-        background-color: #ffffff;
-        border-right: 1px solid #dee2e6;
+        color: #2c3e50;
+        font-weight: 700;
     }
     .stDataFrame {
-        border: 1px solid #dee2e6;
-        border-radius: 5px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        border: 1px solid #b0bec5;
+        border-radius: 8px;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+        background-color: #ffffff;
+    }
+    .stMarkdown {
+        line-height: 1.6;
+        color: #34495e;
     }
     </style>
 """, unsafe_allow_html=True)
 
 # Streamlit Interface
-st.title("SMILES Prediction with XGBoost and GIN (Including Applicability Domain)")
+st.title("SMILES Prediction with XGBoost and GIN")
 
 st.markdown("""
-This application uses an XGBoost model to classify SMILES (0 or 1) and a GIN model to predict pEC50 values for all valid SMILES.
-Results include the Applicability Domain (AD) with a threshold SDC = 7.019561595570336e-06, labeling predictions as "Reliable" or "Unreliable".
-You can input SMILES manually or upload a CSV file containing SMILES.
+This application uses an XGBoost model to classify SMILES (0 or 1) and a GIN model to predict pEC50 values for all valid SMILES. Results include the Applicability Domain (AD) with a threshold SDC = 7.019561595570336e-06, labeling predictions as "Reliable" or "Unreliable". Choose an input method below to provide SMILES data.
 """, unsafe_allow_html=True)
 
-# Sidebar for input options
-st.sidebar.header("Input Options")
-input_type = st.sidebar.radio("Select Input Method:", ("Manual Input", "Upload CSV"))
+# Input Method Selection
+st.subheader("Select Input Method")
+input_type = st.radio("", ("Manual Input", "Upload CSV"), label_visibility="collapsed")
 
 # Input Section
 if input_type == "Manual Input":
-    st.subheader("Manual SMILES Input")
-    smiles_input = st.text_area("Enter SMILES (one per line):", height=150)
+    st.subheader("Enter SMILES")
+    smiles_input = st.text_area("Input SMILES (one per line):", height=200, placeholder="e.g., CC(=O)OC1=CC=CC=C1C(=O)O")
     smiles_list = [s.strip() for s in smiles_input.split('\n') if s.strip()]
 else:
     st.subheader("Upload CSV File")
-    column_name = st.text_input("Enter the column name containing SMILES in the CSV:", "SMILES")
-    uploaded_file = st.file_uploader("Upload a CSV file", type="csv")
+    column_name = st.text_input("Column name containing SMILES:", "SMILES", placeholder="e.g., SMILES")
+    uploaded_file = st.file_uploader("Choose a CSV file", type="csv")
     if uploaded_file:
         df = pd.read_csv(uploaded_file)
         if column_name in df.columns:
@@ -348,6 +356,8 @@ else:
         else:
             st.error(f"Column '{column_name}' not found in the CSV file.")
             st.stop()
+    else:
+        smiles_list = []
 
 # Predict Button
 if st.button("Run Prediction"):
@@ -408,7 +418,7 @@ if st.button("Run Prediction"):
 
             # Display results
             st.subheader("Prediction Results")
-            st.write("Results for all valid SMILES:")
+            st.markdown("Results for all valid SMILES:")
             st.dataframe(result_df)
 
             # Download results button
