@@ -274,7 +274,7 @@ st.markdown("""
     @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;700&display=swap');
     
     .main {
-        background: linear-gradient(to bottom, #e6f3fa, #ffffff);
+        background: #e6f4e6;
         font-family: 'Roboto', sans-serif;
         padding: 20px;
     }
@@ -351,15 +351,20 @@ if input_type == "Manual Input":
     if 'smiles_input' not in st.session_state:
         st.session_state.smiles_input = ""
     
-    # Example button to populate a valid SMILES
+    # Example button to populate 3 random valid SMILES
     if st.button("Example"):
-        st.session_state.smiles_input = "CC(=O)OC1=CC=CC=C1C(=O)O"
+        example_smiles = [
+            "CC[C@H](C)c1ccc2oc(-c3cccc(NC(=O)COc4ccccc4[N+](=O)[O-])c3)nc2c1",
+            "CCOC(=O)c1c[nH]c(=O)c([C@H](CC(=O)NCCc2c[nH]c3ccccc23)c2cc(OC)c3c(c2)OCO3)c1O",
+            "O=CC#CC"
+        ]
+        st.session_state.smiles_input = "\n".join(random.sample(example_smiles, 3))
     
     smiles_input = st.text_area(
         "Input SMILES (one per line):",
         value=st.session_state.smiles_input,
         height=200,
-        placeholder="e.g., CC(=O)OC1=CC=CC=C1C(=O)O",
+        placeholder="e.g., CC[C@H](C)c1ccc2oc(-c3cccc(NC(=O)COc4ccccc4[N+](=O)[O-])c3)nc2c1",
         key="smiles_text_area"
     )
     # Update session state with user input
