@@ -95,7 +95,6 @@ class AD:
         self.train_fps = None
 
     def fit(self):
-        # Tạo dấu vân tay ECFP4 cho tập huấn luyện
         self.train_fps = []
         for smiles in tqdm(self.train_data, desc="Processing training SMILES"):
             fp = smiles_to_ecfp4(smiles, self.radius, self.nBits)
@@ -105,7 +104,6 @@ class AD:
                 st.write(f"Invalid SMILES in training data: {smiles}")
 
     def get_score(self, smiles):
-        # Tính điểm SDC
         test_fp = smiles_to_ecfp4(smiles, self.radius, self.nBits)
         if test_fp is None:
             return np.nan
@@ -230,7 +228,6 @@ def load_gin_model():
 # Tải và khởi tạo AD
 @st.cache_resource
 def load_ad_model():
-    # Giả định tập huấn luyện nằm trong file train_data.csv
     train_df = pd.read_csv('data_AD_classification_streamlit.csv')
     train_smiles = train_df['standardized'].drop_duplicates().tolist()
     ad = AD(train_data=train_smiles)
@@ -331,11 +328,18 @@ if st.button("Dự đoán"):
                 sdc_scores = [ad_model.get_score(smi) for smi in valid_std]
                 ad_labels = ["Reliable" if score >= 7.019561595570336e-06 else "Unreliable" for score in sdc_scores]
 
-            # Lọc các SMILES được XGBoost phân loại là 1
-            classified_as_1 = [(orig, std, ad) for (orig, std, ad), pred in zip(zip(valid_orig, valid_std, ad_labels), xgb_predictions) if pred == 1]
+            # Tạo DataFrame cho tất cả SMILES hợp lệ
+            result_df = pd.DataFrame({
+                'SMILES gốc': valid_orig,
+                'SMILES chuẩn hóa': valid_std,
+                'Dự đoán XGBoost': xgb_predictions,
+                'Applicability Domain': ad_labels
+            })
 
-            if classified_as_1:
-                orig_as_1, std_as_1, ad_as_1 = zip(*classified_as_1)
+            # Lọc các SMILES được XGBoost phân loại là 1
+            indices_as_1 = [i for i, pred in enumerate(xgb_predictions) if pred == 1]
+            if indices_as_1:
+                std_as_1 = [valid_std[i] for i in indices_as_1]
 
                 # Dự đoán pEC50 với GIN cho các SMILES phân loại là 1
                 with st.spinner("Đang chuyển đổi thành dữ liệu đồ thị cho GIN..."):
@@ -351,26 +355,18 @@ if st.button("Dự đoán"):
                             pred = gin_model(batch.x, batch.edge_index, batch.edge_attr, batch.batch)
                         gin_predictions.extend(pred.cpu().numpy().flatten())
 
-                # Tạo DataFrame kết quả
-                result_df = pd.DataFrame({
-                    'SMILES gốc': orig_as_1,
-                    'SMILES chuẩn hóa': std_as_1,
-                    'Dự đoán XGBoost': [1] * len(orig_as_1),
-                    'Dự đoán pEC50 (GIN)': gin_predictions,
-                    'Applicability Domain': ad_as_1
-                })
+                # Thêm dự đoán pEC50 vào DataFrame
+                result_df.loc[indices_as_1, 'Dự đoán pEC50 (GIN)'] = gin_predictions
 
-                # Hiển thị kết quả
-                st.write("Kết quả dự đoán (chỉ các chất được phân loại là 1):")
-                st.dataframe(result_df)
+            # Hiển thị kết quả
+            st.write("Kết quả dự đoán cho tất cả SMILES hợp lệ:")
+            st.dataframe(result_df)
 
-                # Nút tải xuống kết quả
-                csv = result_df.to_csv(index=False)
-                st.download_button(
-                    label="Tải xuống kết quả dưới dạng CSV",
-                    data=csv,
-                    file_name="du_doan.csv",
-                    mime="text/csv"
-                )
-            else:
-                st.write("Không có SMILES nào được dự đoán là 1 bởi mô hình XGBoost.")
+            # Nút tải xuống kết quả
+            csv = result_df.to_csv(index=False)
+            st.download_button(
+                label="Tải xuống kết quả dưới dạng CSV",
+                data=csv,
+                file_name="du_doan.csv",
+                mime="text/csv"
+            )
