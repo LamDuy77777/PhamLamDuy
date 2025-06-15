@@ -49,7 +49,7 @@ def standardize_smiles(batch):
             standardized_list.append(None)
     return standardized_list
 
-# Hàm chuyển đổi SMILES thành đặc trưng (Morgan fingerprint)
+# Hàm chuyển đổi SMILES thành đặc trưng (Morgan fingerprint) - dùng cho XGBoost
 def smiles_to_features(smiles):
     mol = Chem.MolFromSmiles(smiles)
     if mol:
@@ -58,7 +58,7 @@ def smiles_to_features(smiles):
     else:
         return np.zeros(2048)
 
-# Hàm chuyển đổi SMILES thành đối tượng PyG
+# Hàm chuyển đổi SMILES thành đối tượng PyG - dùng cho GIN
 def smi_to_pyg(smi, y=None):
     mol = Chem.MolFromSmiles(smi)
     if mol is None:
@@ -84,7 +84,7 @@ def smi_to_pyg(smi, y=None):
 
     return data
 
-# Định nghĩa lớp MyDataset
+# Định nghĩa lớp MyDataset cho GIN
 class MyDataset(Dataset):
     def __init__(self, standardized):
         mols = [smi_to_pyg(smi, y=None) for smi in tqdm(standardized, total=len(standardized))]
@@ -96,7 +96,7 @@ class MyDataset(Dataset):
     def __len__(self):
         return len(self.X)
 
-# Định nghĩa lớp MyConv
+# Định nghĩa lớp MyConv cho GIN
 class MyConv(nn.Module):
     def __init__(self, node_dim, edge_dim, dropout_p, arch='GIN', mlp_layers=1):
         super().__init__()
@@ -117,7 +117,7 @@ class MyConv(nn.Module):
         x = self.dropout(x)
         return x
 
-# Định nghĩa lớp MyGNN
+# Định nghĩa lớp MyGNN cho GIN
 class MyGNN(nn.Module):
     def __init__(self, node_dim, edge_dim, dropout_p, arch='GIN', num_layers=3, mlp_layers=1):
         super().__init__()
@@ -131,7 +131,7 @@ class MyGNN(nn.Module):
             x = conv(x, edge_index, edge_attr)
         return x
 
-# Định nghĩa lớp MyFinalNetwork
+# Định nghĩa lớp MyFinalNetwork cho GIN
 class MyFinalNetwork(nn.Module):
     def __init__(self, node_dim, edge_dim, arch, num_layers, dropout_mlp, dropout_gin, embedding_dim, mlp_layers, pooling_method):
         super().__init__()
@@ -211,10 +211,7 @@ def load_gin_model():
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 # Giao diện ứng dụng
-st.title("Dự đoán với Mô hình")
-
-# Chọn mô hình
-model_choice = st.selectbox("Chọn mô hình:", ("XGBoost", "GIN (Hồi quy)"))
+st.title("Dự đoán với Mô hình GIN")
 
 # Chọn cách nhập SMILES
 input_method = st.radio("Chọn cách nhập SMILES:", ("Nhập thủ công", "Tải lên file CSV"))
@@ -226,21 +223,21 @@ if input_method == "Nhập thủ công":
         standardized_smiles = standardize_smiles(smiles_list)
         valid_smiles = [smi for smi in standardized_smiles if smi is not None]
         if valid_smiles:
-            if model_choice == "XGBoost":
-                features = [smiles_to_features(smi) for smi in valid_smiles]
-                model = load_xgb_model()
-                predictions = model.predict(np.array(features))
-            elif model_choice == "GIN (Hồi quy)":
-                dataset = MyDataset(valid_smiles)
-                loader = DataLoader(dataset, batch_size=32, shuffle=False)
-                model = load_gin_model()
-                model.to(device)
-                predictions = []
-                for batch in loader:
-                    batch = batch.to(device)
-                    with torch.no_grad():
-                        pred = model(batch.x, batch.edge_index, batch.edge_attr, batch.batch)
-                    predictions.extend(pred.cpu().numpy().flatten())
+            # Chuẩn bị dataset và DataLoader cho GIN
+            dataset = MyDataset(valid_smiles)
+            loader = DataLoader(dataset, batch_size=32, shuffle=False)
+            
+            # Tải và sử dụng mô hình GIN
+            model = load_gin_model()
+            model.to(device)
+            predictions = []
+            for batch in loader:
+                batch = batch.to(device)
+                with torch.no_grad():
+                    pred = model(batch.x, batch.edge_index, batch.edge_attr, batch.batch)
+                predictions.extend(pred.cpu().numpy().flatten())
+            
+            # Hiển thị kết quả
             result_df = pd.DataFrame({
                 'SMILES đã chuẩn hóa': valid_smiles,
                 'Dự đoán': predictions
@@ -260,21 +257,22 @@ else:
             valid_indices = [i for i, smi in enumerate(standardized_smiles) if smi is not None]
             if valid_indices:
                 valid_smiles = [standardized_smiles[i] for i in valid_indices]
-                if model_choice == "XGBoost":
-                    features = [smiles_to_features(smi) for smi in valid_smiles]
-                    model = load_xgb_model()
-                    predictions = model.predict(np.array(features))
-                elif model_choice == "GIN (Hồi quy)":
-                    dataset = MyDataset(valid_smiles)
-                    loader = DataLoader(dataset, batch_size=32, shuffle=False)
-                    model = load_gin_model()
-                    model.to(device)
-                    predictions = []
-                    for batch in loader:
-                        batch = batch.to(device)
-                        with torch.no_grad():
-                            pred = model(batch.x, batch.edge_index, batch.edge_attr, batch.batch)
-                        predictions.extend(pred.cpu().numpy().flatten())
+                
+                # Chuẩn bị dataset và DataLoader cho GIN
+                dataset = MyDataset(valid_smiles)
+                loader = DataLoader(dataset, batch_size=32, shuffle=False)
+                
+                # Tải và sử dụng mô hình GIN
+                model = load_gin_model()
+                model.to(device)
+                predictions = []
+                for batch in loader:
+                    batch = batch.to(device)
+                    with torch.no_grad():
+                        pred = model(batch.x, batch.edge_index, batch.edge_attr, batch.batch)
+                    predictions.extend(pred.cpu().numpy().flatten())
+                
+                # Cập nhật kết quả vào DataFrame
                 df.loc[valid_indices, 'Prediction'] = predictions
                 st.write("Dữ liệu với dự đoán:", df[['SMILES', 'Standardized_SMILES', 'Prediction']])
             else:
