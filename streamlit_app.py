@@ -1,60 +1,59 @@
 import streamlit as st
+import pickle
+# Giả định có hàm chuẩn hóa SMILES, thay bằng hàm thực tế của bạn
+# from smiles_normalizer import normalize_smiles
 
-# Khởi tạo session_state để theo dõi trang hiện tại
+# Tải mô hình với caching
+@st.cache_resource
+def load_classification_model():
+    with open('classification_model.pkl', 'rb') as f:
+        model = pickle.load(f)
+    return model
+
+@st.cache_resource
+def load_regression_model():
+    with open('regression_model.pkl', 'rb') as f:
+        model = pickle.load(f)
+    return model
+
+classification_model = load_classification_model()
+regression_model = load_regression_model()
+
+# Khởi tạo session_state để theo dõi trang
 if 'page' not in st.session_state:
     st.session_state.page = 'Giới thiệu'
 
-# Tạo ba nút chuyển trang ở đầu trang bằng cách dùng columns
-col1, col2, col3 = st.columns(3)
+# Nút điều hướng
+col1, col2 = st.columns(2)
 with col1:
     if st.button("Giới thiệu"):
         st.session_state.page = 'Giới thiệu'
 with col2:
-    if st.button("Chuẩn hóa SMILES"):
-        st.session_state.page = 'Chuẩn hóa SMILES'
-with col3:
-    if st.button("Tải mô hình"):
-        st.session_state.page = 'Tải mô hình'
+    if st.button("Dự đoán"):
+        st.session_state.page = 'Dự đoán'
 
-# Hiển thị nội dung dựa trên trang hiện tại
+# Nội dung trang
 if st.session_state.page == 'Giới thiệu':
-    st.title('**AI MODEL FOR PREDICTING APELIN RECEPTOR AGONISTS**')
-    st.write("Chào mừng bạn đến với ứng dụng của tôi! Đây là nơi để giới thiệu về dự án và các chức năng chính.")
-    st.write("Sử dụng các nút ở trên để chuyển sang các trang khác.")
-    st.header("Sử dụng st.selectbox để tạo hộp chọn")
-    color = st.selectbox("Em thích màu gì",("đen", "trắng", "xanh dương", "tím nhạt"))
-    button = st.button("Submit answer")
-    if button:
-        st.write(color)
-    st.header("Sử dụng st.multiselect để tạo hộp multiselect")
-    st.multiselect("Thích con gì dzay?", ["cá", "gà", "thỏ"])
-    st.sidebar.header("Option")
-    
-    
-
-elif st.session_state.page == 'Chuẩn hóa SMILES':
-    # Tiêu đề ứng dụng
-    
-    st.title("Trang Chuẩn hóa SMILES")
-    # Tạo ô browse file
-    uploaded_file = st.file_uploader("Chọn một file để tải lên", type=["txt", "csv", "pdf"])
-
-    # Xử lý file sau khi được tải lên
-    if uploaded_file is not None:
-        # Hiển thị thông tin file
-        st.write("Tên file:", uploaded_file.name)
-        st.write("Kích thước file:", uploaded_file.size, "bytes")
-    
-        # Đọc nội dung file (ví dụ với file text)
-        if uploaded_file.type == "text/plain":
-            content = uploaded_file.read().decode("utf-8")
-            st.write("Nội dung file:")
-            st.text(content)
+    st.title("Dự đoán bằng AI")
+    st.write("Chào mừng bạn đến với ứng dụng của tôi! Đây là nơi triển khai mô hình phân loại và hồi quy để dự đoán dựa trên SMILES.")
+    st.write("Nhấn nút 'Dự đoán' để sử dụng các mô hình.")
+elif st.session_state.page == 'Dự đoán':
+    st.title("Dự đoán")
+    model_type = st.selectbox("Chọn mô hình", ["Phân loại", "Hồi quy"])
+    smiles_input = st.text_input("Nhập SMILES")
+    if st.button("Dự đoán"):
+        if smiles_input:
+            try:
+                # Chuẩn hóa SMILES (thay bằng hàm thực tế nếu có)
+                normalized_smiles = smiles_input  # Placeholder
+                st.write("SMILES đã chuẩn hóa:", normalized_smiles)
+                if model_type == "Phân loại":
+                    prediction = classification_model.predict([normalized_smiles])
+                    st.write("Kết quả phân loại:", prediction)
+                elif model_type == "Hồi quy":
+                    prediction = regression_model.predict([normalized_smiles])
+                    st.write("Kết quả hồi quy:", prediction)
+            except Exception as e:
+                st.write("Lỗi:", str(e))
         else:
-            st.write("File đã được tải lên, nhưng chưa xử lý nội dung.")
-    else:
-        st.write("Vui lòng tải lên một file!")
-elif st.session_state.page == 'Tải mô hình':
-    st.title("Trang Tải Mô hình")
-    st.write("Tại đây, bạn có thể tải và xem thông tin về mô hình đã huấn luyện.")
-    st.write("Chức năng tải mô hình sẽ được thêm sau khi bạn cung cấp chi tiết cụ thể.")
+            st.write("Vui lòng nhập SMILES")
