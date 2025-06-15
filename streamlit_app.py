@@ -1,16 +1,15 @@
 import streamlit as st
-import pickle
+import pandas as pd
+import numpy as np
 from rdkit import Chem
 from rdkit.Chem import AllChem
 from rdkit.Chem.MolStandardize import rdMolStandardize
-from rdkit import Chem, RDLogger
-import pandas as pd
-import numpy as np
+from rdkit import RDLogger
 from tqdm import tqdm
 import pickle
 import xgboost as xgb
 
-# Hàm chuẩn hóa SMILES của bạn
+# Hàm chuẩn hóa SMILES
 def standardize_smiles(batch):
     uc = rdMolStandardize.Uncharger()
     md = rdMolStandardize.MetalDisconnector()
@@ -67,14 +66,22 @@ if input_method == "Nhập thủ công":
     if st.button("Dự đoán") and smiles_input:
         smiles_list = smiles_input.split('\n')
         standardized_smiles = standardize_smiles(smiles_list)
-        st.write("SMILES đã chuẩn hóa:", standardized_smiles)
         
-        # Chuyển đổi SMILES thành đặc trưng và dự đoán
-        model = load_model()
-        features = [smiles_to_features(smi) for smi in standardized_smiles if smi is not None]
-        if features:
+        # Lọc SMILES hợp lệ
+        valid_smiles = [smi for smi in standardized_smiles if smi is not None]
+        if valid_smiles:
+            # Chuyển đổi SMILES thành đặc trưng
+            features = [smiles_to_features(smi) for smi in valid_smiles]
+            model = load_model()
             predictions = model.predict(np.array(features))
-            st.write("Dự đoán:", predictions)
+            
+            # Tạo DataFrame cho kết quả
+            result_df = pd.DataFrame({
+                'STT': range(1, len(valid_smiles) + 1),
+                'SMILES đã chuẩn hóa': valid_smiles,
+                'Dự đoán': predictions
+            })
+            st.write("Kết quả dự đoán:", result_df)
         else:
             st.write("Không có SMILES hợp lệ để dự đoán.")
 
@@ -86,15 +93,19 @@ else:
             smiles_list = df['SMILES'].tolist()
             standardized_smiles = standardize_smiles(smiles_list)
             df['Standardized_SMILES'] = standardized_smiles
-            st.write("Dữ liệu với SMILES đã chuẩn hóa:", df)
             
-            # Chuyển đổi SMILES thành đặc trưng và dự đoán
-            model = load_model()
-            features = [smiles_to_features(smi) for smi in standardized_smiles if smi is not None]
-            if features:
+            # Lọc SMILES hợp lệ
+            valid_indices = [i for i, smi in enumerate(standardized_smiles) if smi is not None]
+            if valid_indices:
+                valid_smiles = [standardized_smiles[i] for i in valid_indices]
+                features = [smiles_to_features(smi) for smi in valid_smiles]
+                model = load_model()
                 predictions = model.predict(np.array(features))
-                df.loc[df['Standardized_SMILES'].notnull(), 'Prediction'] = predictions
-                st.write("Dữ liệu với dự đoán:", df)
+                
+                # Thêm cột dự đoán vào DataFrame
+                df.loc[valid_indices, 'Prediction'] = predictions
+                df['STT'] = range(1, len(df) + 1)
+                st.write("Dữ liệu với dự đoán:", df[['STT', 'SMILES', 'Standardized_SMILES', 'Prediction']])
             else:
                 st.write("Không có SMILES hợp lệ để dự đoán.")
         else:
