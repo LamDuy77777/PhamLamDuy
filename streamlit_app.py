@@ -180,8 +180,8 @@ def load_xgb_model():
 @st.cache_resource
 def load_gin_model():
     with open('GIN_597_562 (1).pkl', 'rb') as f:
-        state_dict = pickle.load(f)
-
+        state_dict = torch.load(f, map_location=torch.device('cpu'))
+    
     node_dim = 72  # Giá trị thực tế từ dữ liệu huấn luyện
     edge_dim = 14  # Giá trị thực tế từ dữ liệu huấn luyện
     best_params = {
@@ -195,6 +195,8 @@ def load_gin_model():
     model = MyFinalNetwork(
         node_dim=node_dim,
         edge_dim=edge_dim,
+
+
         arch='GIN',
         num_layers=best_params['num_layer'],
         dropout_mlp=best_params['dropout_mlp'],
