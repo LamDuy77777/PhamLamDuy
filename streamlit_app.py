@@ -122,4 +122,168 @@ class MyGNN(nn.Module):
     def __init__(self, node_dim, edge_dim, dropout_p, arch='GIN', num_layers=3, mlp_layers=1):
         super().__init__()
         self.convs = nn.ModuleList(
-            [MyConv(node_dim, edge_dim, dropout_p=dropout_p, arch=arch, mlp_layers=mlp_layers
+            [MyConv(node_dim, edge_dim, dropout_p=dropout_p, arch=arch, mlp_layers=mlp_layers)
+             for _ in range(num_layers)]
+        )
+
+    def forward(self, x, edge_index, edge_attr):
+        for conv in self.convs:
+            x = conv(x, edge_index, edge_attr)
+        return x
+
+# Định nghĩa lớp MyFinalNetwork
+class MyFinalNetwork(nn.Module):
+    def __init__(self, node_dim, edge_dim, arch, num_layers, dropout_mlp, dropout_gin, embedding_dim, mlp_layers, pooling_method):
+        super().__init__()
+        node_dim = (node_dim - 1) + 118 + 1
+        edge_dim = (edge_dim - 1) + 21 + 1
+
+        self.gnn = MyGNN(node_dim, edge_dim, dropout_p=dropout_gin, arch=arch, num_layers=num_layers, mlp_layers=mlp_layers)
+
+        if pooling_method == 'add':
+            self.pooling_fn = global_add_pool
+        elif pooling_method == 'mean':
+            self.pooling_fn = global_mean_pool
+        elif pooling_method == 'max':
+            self.pooling_fn = global_max_pool
+        else:
+            raise ValueError("Phương pháp pooling không hợp lệ")
+
+        self.head = nn.Sequential(
+            nn.BatchNorm1d(node_dim),
+            nn.Dropout(p=dropout_mlp),
+            nn.Linear(node_dim, embedding_dim),
+            nn.ReLU(),
+            nn.BatchNorm1d(embedding_dim),
+            nn.Dropout(p=dropout_mlp),
+            nn.Linear(embedding_dim, 1)
+        )
+
+    def forward(self, x, edge_index, edge_attr, batch):
+        x0 = F.one_hot(x[:, 0].to(torch.int64), num_classes=118+1).float()
+        edge_attr0 = F.one_hot(edge_attr[:, 0].to(torch.int64), num_classes=21+1).float()
+        x = torch.cat([x0, x[:, 1:]], dim=1)
+        edge_attr = torch.cat([edge_attr0, edge_attr[:, 1:]], dim=1)
+
+        node_out = self.gnn(x, edge_index, edge_attr)
+        graph_out = self.pooling_fn(node_out, batch)
+        return self.head(graph_out)
+
+# Tải mô hình XGBoost
+@st.cache_resource
+def load_xgb_model():
+    with open('xgboost_binary_10nM.pkl', 'rb') as f:
+        model = pickle.load(f)
+    return model
+
+# Tải state_dict của mô hình GIN và khởi tạo mô hình
+@st.cache_resource
+def load_gin_model():
+    with open('/content/drive/MyDrive/KL/Screening/GIN_597_562.pkl', 'rb') as f:
+        state_dict = pickle.load(f)
+
+    node_dim = 72  # Giá trị thực tế từ dữ liệu huấn luyện
+    edge_dim = 14  # Giá trị thực tế từ dữ liệu huấn luyện
+    best_params = {
+        'embedding_dim': 256,
+        'num_layer': 7,
+        'dropout_mlp': 0.28210247642451436,
+        'dropout_gin': 0.12555795277599677,
+        'mlp_layers': 2,
+        'pooling_method': 'mean'
+    }
+    model = MyFinalNetwork(
+        node_dim=node_dim,
+        edge_dim=edge_dim,
+        arch='GIN',
+        num_layers=best_params['num_layer'],
+        dropout_mlp=best_params['dropout_mlp'],
+        dropout_gin=best_params['dropout_gin'],
+        embedding_dim=best_params['embedding_dim'],
+        mlp_layers=best_params['mlp_layers'],
+        pooling_method=best_params['pooling_method']
+    )
+    model.load_state_dict(state_dict)
+    model.eval()
+    return model
+
+# Định nghĩa device
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+# Giao diện ứng dụng
+st.title("Dự đoán với Mô hình XGBoost và GIN")
+
+# Chọn cách nhập SMILES
+input_method = st.radio("Chọn cách nhập SMILES:", ("Nhập thủ công", "Tải lên file CSV"))
+
+if input_method == "Nhập thủ công":
+    smiles_input = st.text_area("Nhập SMILES (mỗi SMILES trên một dòng):")
+    if st.button("Dự đoán") and smiles_input:
+        smiles_list = smiles_input.split('\n')
+        standardized_smiles = standardize_smiles(smiles_list)
+        valid_smiles = [smi for smi in standardized_smiles if smi is not None]
+        if valid_smiles:
+            # Dự đoán bằng XGBoost
+            features = [smiles_to_features(smi) for smi in valid_smiles]
+            xgb_model = load_xgb_model()
+            xgb_predictions = xgb_model.predict(np.array(features))
+
+            # Chuyển SMILES thành graph và dự đoán bằng GIN
+            dataset = MyDataset(valid_smiles)
+            loader = DataLoader(dataset, batch_size=32, shuffle=False)
+            gin_model = load_gin_model()
+            gin_model.to(device)
+            gin_predictions = []
+            for batch in loader:
+                batch = batch.to(device)
+                with torch.no_grad():
+                    pred = gin_model(batch.x, batch.edge_index, batch.edge_attr, batch.batch)
+                gin_predictions.extend(pred.cpu().numpy().flatten())
+
+            # Tạo DataFrame cho kết quả
+            result_df = pd.DataFrame({
+                'SMILES đã chuẩn hóa': valid_smiles,
+                'Dự đoán XGBoost': xgb_predictions,
+                'Dự đoán pEC50 (GIN)': gin_predictions
+            })
+            st.write("Kết quả dự đoán:", result_df)
+        else:
+            st.write("Không có SMILES hợp lệ để dự đoán.")
+
+else:
+    uploaded_file = st.file_uploader("Tải lên file CSV chứa SMILES", type=["csv"])
+    if uploaded_file and st.button("Dự đoán"):
+        df = pd.read_csv(uploaded_file)
+        if 'SMILES' in df.columns:
+            smiles_list = df['SMILES'].tolist()
+            standardized_smiles = standardize_smiles(smiles_list)
+            df['Standardized_SMILES'] = standardized_smiles
+            valid_indices = [i for i, smi in enumerate(standardized_smiles) if smi is not None]
+            if valid_indices:
+                valid_smiles = [standardized_smiles[i] for i in valid_indices]
+
+                # Dự đoán bằng XGBoost
+                features = [smiles_to_features(smi) for smi in valid_smiles]
+                xgb_model = load_xgb_model()
+                xgb_predictions = xgb_model.predict(np.array(features))
+
+                # Chuyển SMILES thành graph và dự đoán bằng GIN
+                dataset = MyDataset(valid_smiles)
+                loader = DataLoader(dataset, batch_size=32, shuffle=False)
+                gin_model = load_gin_model()
+                gin_model.to(device)
+                gin_predictions = []
+                for batch in loader:
+                    batch = batch.to(device)
+                    with torch.no_grad():
+                        pred = gin_model(batch.x, batch.edge_index, batch.edge_attr, batch.batch)
+                    gin_predictions.extend(pred.cpu().numpy().flatten())
+
+                # Thêm cột dự đoán vào DataFrame
+                df.loc[valid_indices, 'Prediction_XGBoost'] = xgb_predictions
+                df.loc[valid_indices, 'Prediction_pEC50_GIN'] = gin_predictions
+                st.write("Dữ liệu với dự đoán:", df[['SMILES', 'Standardized_SMILES', 'Prediction_XGBoost', 'Prediction_pEC50_GIN']])
+            else:
+                st.write("Không có SMILES hợp lệ để dự đoán.")
+        else:
+            st.write("File CSV phải chứa cột 'SMILES'")
