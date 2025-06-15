@@ -272,7 +272,7 @@ class MyDataset(Dataset):
 st.title("Dự đoán với Mô hình XGBoost và GIN (bao gồm Miền Ứng dụng)")
 
 st.write("""
-Ứng dụng này sử dụng mô hình XGBoost để phân loại SMILES (0 hoặc 1) và mô hình GIN để dự đoán giá trị pEC50 cho các SMILES được phân loại là 1.
+Ứng dụng này sử dụng mô hình XGBoost để phân loại SMILES (0 hoặc 1) và mô hình GIN để dự đoán giá trị pEC50 cho tất cả SMILES hợp lệ.
 Kết quả bao gồm miền ứng dụng (AD) với ngưỡng SDC = 7.019561595570336e-06, phân loại dự đoán là "Reliable" hoặc "Unreliable".
 Bạn có thể nhập SMILES thủ công hoặc tải lên tệp CSV chứa SMILES.
 """)
@@ -328,35 +328,28 @@ if st.button("Dự đoán"):
                 sdc_scores = [ad_model.get_score(smi) for smi in valid_std]
                 ad_labels = ["Reliable" if score >= 7.019561595570336e-06 else "Unreliable" for score in sdc_scores]
 
-            # Tạo DataFrame cho tất cả SMILES hợp lệ
+            # Dự đoán pEC50 với GIN cho tất cả SMILES hợp lệ
+            with st.spinner("Đang chuyển đổi thành dữ liệu đồ thị cho GIN..."):
+                dataset = MyDataset(valid_std)
+                dataloader = DataLoader(dataset, batch_size=32, shuffle=False)
+
+            with st.spinner("Đang thực hiện dự đoán pEC50 với GIN..."):
+                gin_model = load_gin_model()
+                gin_predictions = []
+                for batch in dataloader:
+                    batch = batch.to(device)
+                    with torch.no_grad():
+                        pred = gin_model(batch.x, batch.edge_index, batch.edge_attr, batch.batch)
+                    gin_predictions.extend(pred.cpu().numpy().flatten())
+
+            # Tạo DataFrame kết quả
             result_df = pd.DataFrame({
                 'SMILES gốc': valid_orig,
                 'SMILES chuẩn hóa': valid_std,
                 'Dự đoán XGBoost': xgb_predictions,
+                'Dự đoán pEC50 (GIN)': gin_predictions,
                 'Applicability Domain': ad_labels
             })
-
-            # Lọc các SMILES được XGBoost phân loại là 1
-            indices_as_1 = [i for i, pred in enumerate(xgb_predictions) if pred == 1]
-            if indices_as_1:
-                std_as_1 = [valid_std[i] for i in indices_as_1]
-
-                # Dự đoán pEC50 với GIN cho các SMILES phân loại là 1
-                with st.spinner("Đang chuyển đổi thành dữ liệu đồ thị cho GIN..."):
-                    dataset = MyDataset(std_as_1)
-                    dataloader = DataLoader(dataset, batch_size=32, shuffle=False)
-
-                with st.spinner("Đang thực hiện dự đoán pEC50 với GIN..."):
-                    gin_model = load_gin_model()
-                    gin_predictions = []
-                    for batch in dataloader:
-                        batch = batch.to(device)
-                        with torch.no_grad():
-                            pred = gin_model(batch.x, batch.edge_index, batch.edge_attr, batch.batch)
-                        gin_predictions.extend(pred.cpu().numpy().flatten())
-
-                # Thêm dự đoán pEC50 vào DataFrame
-                result_df.loc[indices_as_1, 'Dự đoán pEC50 (GIN)'] = gin_predictions
 
             # Hiển thị kết quả
             st.write("Kết quả dự đoán cho tất cả SMILES hợp lệ:")
