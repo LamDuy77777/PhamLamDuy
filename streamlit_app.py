@@ -231,7 +231,7 @@ def load_gin_model():
 @st.cache_resource
 def load_ad_model():
     # Giả định tập huấn luyện nằm trong file train_data.csv
-    train_df = pd.read_csv('train_data.csv')
+    train_df = pd.read_csv('data_AD_classification_streamlit.csv')
     train_smiles = train_df['standardized'].drop_duplicates().tolist()
     ad = AD(train_data=train_smiles)
     ad.fit()
