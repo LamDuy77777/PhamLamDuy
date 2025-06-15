@@ -179,7 +179,7 @@ def load_xgb_model():
 # Tải state_dict của mô hình GIN và khởi tạo mô hình
 @st.cache_resource
 def load_gin_model():
-    with open('GIN_597_562 (1).pkl', 'rb') as f:
+    with open('/content/drive/MyDrive/KL/Screening/GIN_597_562.pkl', 'rb') as f:
         state_dict = pickle.load(f)
 
     node_dim = 72  # Giá trị thực tế từ dữ liệu huấn luyện
