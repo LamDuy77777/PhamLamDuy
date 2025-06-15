@@ -8,4 +8,3 @@ xgboost
 chemprop
 torch
 torch_geometric
-Pillow
