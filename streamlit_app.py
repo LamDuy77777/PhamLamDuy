@@ -130,7 +130,7 @@ def load_model():
         mlp_layers=best_params['mlp_layers'],
         pooling_method=best_params['pooling_method']
     ).to(device)
-    with open('/content/drive/MyDrive/KL/Screening/GIN_597_562.pkl', 'rb') as f:
+    with open('GIN_597_562 (1).pkl', 'rb') as f:
         state_dict = pickle.load(f)
     model.load_state_dict(state_dict)
     model.eval()
