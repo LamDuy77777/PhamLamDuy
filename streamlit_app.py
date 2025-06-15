@@ -18,7 +18,7 @@ with col3:
 
 # Hiển thị nội dung dựa trên trang hiện tại
 if st.session_state.page == 'Giới thiệu':
-    st.title('**AI MODEL FOR PREDICTING APELIN RECEPTOR AGONISTS **')
+    st.title('**AI MODEL FOR PREDICTING APELIN RECEPTOR AGONISTS**')
     st.write("Chào mừng bạn đến với ứng dụng của tôi! Đây là nơi để giới thiệu về dự án và các chức năng chính.")
     st.write("Sử dụng các nút ở trên để chuyển sang các trang khác.")
     st.header("Sử dụng st.selectbox để tạo hộp chọn")
