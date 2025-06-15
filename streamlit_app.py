@@ -77,7 +77,6 @@ if input_method == "Nhập thủ công":
             
             # Tạo DataFrame cho kết quả
             result_df = pd.DataFrame({
-                'STT': range(1, len(valid_smiles) + 1),
                 'SMILES đã chuẩn hóa': valid_smiles,
                 'Dự đoán': predictions
             })
@@ -104,8 +103,7 @@ else:
                 
                 # Thêm cột dự đoán vào DataFrame
                 df.loc[valid_indices, 'Prediction'] = predictions
-                df['STT'] = range(1, len(df) + 1)
-                st.write("Dữ liệu với dự đoán:", df[['STT', 'SMILES', 'Standardized_SMILES', 'Prediction']])
+                st.write("Dữ liệu với dự đoán:", df[['SMILES', 'Standardized_SMILES', 'Prediction']])
             else:
                 st.write("Không có SMILES hợp lệ để dự đoán.")
         else:
