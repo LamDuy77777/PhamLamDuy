@@ -1,20 +1,17 @@
 import streamlit as st
-import pandas as pd
-import numpy as np
-from rdkit import Chem
-from rdkit.Chem import AllChem
-from rdkit.Chem.MolStandardize import rdMolStandardize
-from rdkit import RDLogger
-from tqdm import tqdm
-import pickle
-import xgboost as xgb
 import torch
-from torch_geometric.data import Data, Dataset, DataLoader
-from chemprop.featurizers.atom import MultiHotAtomFeaturizer
-from chemprop.featurizers.bond import MultiHotBondFeaturizer
 import torch.nn as nn
 import torch.nn.functional as F
 from torch_geometric.nn import GINEConv, global_add_pool, global_mean_pool, global_max_pool
+from torch_geometric.data import Data, Dataset, DataLoader
+from rdkit import Chem
+from rdkit.Chem import AllChem
+from rdkit.Chem.MolStandardize import rdMolStandardize
+from tqdm import tqdm
+import pandas as pd
+import numpy as np
+from chemprop.featurizers.atom import MultiHotAtomFeaturizer
+from chemprop.featurizers.bond import MultiHotBondFeaturizer
 
 # Khởi tạo featurizer
 featurizer = MultiHotAtomFeaturizer.v2()
@@ -27,7 +24,7 @@ def standardize_smiles(batch):
     te = rdMolStandardize.TautomerEnumerator()
 
     standardized_list = []
-    for smi in tqdm(batch, desc='Processing . . .'):
+    for smi in tqdm(batch, desc='Processing SMILES'):
         try:
             mol = Chem.MolFromSmiles(smi)
             if mol:
@@ -45,20 +42,11 @@ def standardize_smiles(batch):
                 standardized_list.append(None)
                 st.write(f"Invalid SMILES: {smi}")
         except Exception as e:
-            st.write(f"An error occurred with SMILES {smi}: {str(e)}")
+            st.write(f"Error with SMILES {smi}: {str(e)}")
             standardized_list.append(None)
     return standardized_list
 
-# Hàm chuyển đổi SMILES thành đặc trưng (Morgan fingerprint)
-def smiles_to_features(smiles):
-    mol = Chem.MolFromSmiles(smiles)
-    if mol:
-        fp = AllChem.GetMorganFingerprintAsBitVect(mol, 2, nBits=2048)
-        return np.array(fp)
-    else:
-        return np.zeros(2048)
-
-# Hàm chuyển đổi SMILES thành đối tượng PyG
+# Hàm chuyển SMILES thành đối tượng PyG
 def smi_to_pyg(smi, y=None):
     mol = Chem.MolFromSmiles(smi)
     if mol is None:
@@ -78,10 +66,8 @@ def smi_to_pyg(smi, y=None):
         mol=mol,
         smiles=smi
     )
-
     if y is not None:
         data.y = torch.FloatTensor([[y]])
-
     return data
 
 # Định nghĩa lớp MyDataset
@@ -169,19 +155,12 @@ class MyFinalNetwork(nn.Module):
         graph_out = self.pooling_fn(node_out, batch)
         return self.head(graph_out)
 
-# Tải mô hình XGBoost
-@st.cache_resource
-def load_xgb_model():
-    with open('xgboost_binary_10nM.pkl', 'rb') as f:
-        model = pickle.load(f)
-    return model
-
-# Tải state_dict của mô hình GIN và khởi tạo mô hình
+# Tải state_dict và khởi tạo mô hình GIN
 @st.cache_resource
 def load_gin_model():
-    with open('GIN_597_562 (1).pkl', 'rb') as f:
+    with open('GIN_597_562.pkl', 'rb') as f:
         state_dict = torch.load(f, map_location=torch.device('cpu'))
-    
+
     node_dim = 72  # Giá trị thực tế từ dữ liệu huấn luyện
     edge_dim = 14  # Giá trị thực tế từ dữ liệu huấn luyện
     best_params = {
@@ -195,8 +174,6 @@ def load_gin_model():
     model = MyFinalNetwork(
         node_dim=node_dim,
         edge_dim=edge_dim,
-
-
         arch='GIN',
         num_layers=best_params['num_layer'],
         dropout_mlp=best_params['dropout_mlp'],
@@ -210,10 +187,10 @@ def load_gin_model():
     return model
 
 # Định nghĩa device
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+device = torch.device('cpu')
 
-# Giao diện ứng dụng
-st.title("Dự đoán với Mô hình XGBoost và GIN")
+# Giao diện Streamlit
+st.title("Dự đoán pEC50 với Mô hình GIN")
 
 # Chọn cách nhập SMILES
 input_method = st.radio("Chọn cách nhập SMILES:", ("Nhập thủ công", "Tải lên file CSV"))
@@ -225,11 +202,6 @@ if input_method == "Nhập thủ công":
         standardized_smiles = standardize_smiles(smiles_list)
         valid_smiles = [smi for smi in standardized_smiles if smi is not None]
         if valid_smiles:
-            # Dự đoán bằng XGBoost
-            features = [smiles_to_features(smi) for smi in valid_smiles]
-            xgb_model = load_xgb_model()
-            xgb_predictions = xgb_model.predict(np.array(features))
-
             # Chuyển SMILES thành graph và dự đoán bằng GIN
             dataset = MyDataset(valid_smiles)
             loader = DataLoader(dataset, batch_size=32, shuffle=False)
@@ -245,7 +217,6 @@ if input_method == "Nhập thủ công":
             # Tạo DataFrame cho kết quả
             result_df = pd.DataFrame({
                 'SMILES đã chuẩn hóa': valid_smiles,
-                'Dự đoán XGBoost': xgb_predictions,
                 'Dự đoán pEC50 (GIN)': gin_predictions
             })
             st.write("Kết quả dự đoán:", result_df)
@@ -264,11 +235,6 @@ else:
             if valid_indices:
                 valid_smiles = [standardized_smiles[i] for i in valid_indices]
 
-                # Dự đoán bằng XGBoost
-                features = [smiles_to_features(smi) for smi in valid_smiles]
-                xgb_model = load_xgb_model()
-                xgb_predictions = xgb_model.predict(np.array(features))
-
                 # Chuyển SMILES thành graph và dự đoán bằng GIN
                 dataset = MyDataset(valid_smiles)
                 loader = DataLoader(dataset, batch_size=32, shuffle=False)
@@ -282,9 +248,8 @@ else:
                     gin_predictions.extend(pred.cpu().numpy().flatten())
 
                 # Thêm cột dự đoán vào DataFrame
-                df.loc[valid_indices, 'Prediction_XGBoost'] = xgb_predictions
                 df.loc[valid_indices, 'Prediction_pEC50_GIN'] = gin_predictions
-                st.write("Dữ liệu với dự đoán:", df[['SMILES', 'Standardized_SMILES', 'Prediction_XGBoost', 'Prediction_pEC50_GIN']])
+                st.write("Dữ liệu với dự đoán:", df[['SMILES', 'Standardized_SMILES', 'Prediction_pEC50_GIN']])
             else:
                 st.write("Không có SMILES hợp lệ để dự đoán.")
         else:
