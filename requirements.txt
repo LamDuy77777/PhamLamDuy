@@ -5,3 +5,6 @@ rdkit
 scikit-learn
 tqdm
 xgboost
+chemprop
+torch
+torch-geometric
