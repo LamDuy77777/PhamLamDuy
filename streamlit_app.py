@@ -219,7 +219,7 @@ def load_gin_model():
         mlp_layers=best_params['mlp_layers'],
         pooling_method=best_params['pooling_method']
     ).to(device)
-    with open('GIN_597_562_cpu.pkl', 'rb') as f:
+    with open('GIN_597_562_cpu1.pkl', 'rb') as f:
         state_dict = torch.load(f, map_location=device)
     model.load_state_dict(state_dict)
     model.eval()
@@ -268,11 +268,14 @@ class MyDataset(Dataset):
     def __len__(self):
         return len(self.X)
 
-# Custom CSS for background color
+# Custom CSS for background and title color
 st.markdown("""
     <style>
     .stApp {
-        background-color: #e6f4e6;
+        background-color: #e6f0fa; /* Light blue background */
+    }
+    h1, h2 {
+        color: #000080; /* Navy blue for titles */
     }
     </style>
 """, unsafe_allow_html=True)
