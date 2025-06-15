@@ -398,4 +398,3 @@ if st.button("Run Prediction"):
                 file_name="predictions.csv",
                 mime="text/csv"
             )
-```
