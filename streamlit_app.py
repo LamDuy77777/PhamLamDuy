@@ -268,7 +268,16 @@ class MyDataset(Dataset):
     def __len__(self):
         return len(self.X)
 
-# Custom CSS for styling
+# Function to generate a valid SMILES example
+def generate_example_smiles():
+    example_smiles = [
+        "CC(=O)OC1=CC=CC=C1C(=O)O",  # Aspirin
+        "CN1C=NC2=C1C(=O)N(C(=O)N2C)C",  # Caffeine
+        "CCN(CC)C(=O)NC1=CC=C(C=C1)O"  # Paracetamol
+    ]
+    return random.choice(example_smiles)
+
+# Custom CSS for enhanced styling
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;700&display=swap');
@@ -278,6 +287,16 @@ st.markdown("""
         font-family: 'Roboto', sans-serif;
         padding: 20px;
     }
+    h1 {
+        color: #003087 !important; /* Navy blue for title */
+        font-weight: 700;
+        text-align: center;
+        margin-bottom: 20px;
+    }
+    h2, h3 {
+        color: #2c3e50;
+        font-weight: 600;
+    }
     .stButton>button {
         background-color: #20c997;
         color: white;
@@ -285,46 +304,71 @@ st.markdown("""
         padding: 12px 24px;
         font-size: 16px;
         font-weight: 700;
-        transition: background-color 0.3s ease;
+        transition: all 0.3s ease;
         border: none;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     }
     .stButton>button:hover {
         background-color: #17a589;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        transform: translateY(-1px);
+    }
+    .example-button {
+        background-color: #007bff !important;
+        color: white !important;
+    }
+    .example-button:hover {
+        background-color: #0056b3 !important;
     }
     .stTextInput>div>input, .stTextArea>div>textarea {
         border: 1px solid #b0bec5;
         border-radius: 8px;
-        padding: 10px;
+        padding: 12px;
         font-size: 14px;
         background-color: #ffffff;
         box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        transition: border-color 0.3s ease;
+    }
+    .stTextInput>div>input:focus, .stTextArea>div>textarea:focus {
+        border-color: #20c997;
+        box-shadow: 0 0 0 3px rgba(32, 201, 151, 0.2);
     }
     .stRadio>div {
         background-color: #ffffff;
-        padding: 15px;
-        border-radius: 8px;
+        padding: 20px;
+        border-radius: 10px;
         box-shadow: 0 2px 6px rgba(0,0,0,0.1);
         margin-bottom: 20px;
     }
     .stFileUploader>div {
         border: 2px dashed #20c997;
-        border-radius: 8px;
-        padding: 15px;
+        border-radius: 10px;
+        padding: 20px;
         background-color: #f8fafc;
     }
-    h1, h2, h3 {
-        color: #2c3e50;
-        font-weight: 700;
-    }
     .stDataFrame {
-        border: 1px solid #b0bec5;
-        border-radius: 8px;
+        border: 1px solid #e0e0e0;
+        border-radius: 10px;
         box-shadow: 0 2px 6px rgba(0,0,0,0.1);
         background-color: #ffffff;
+        padding: 10px;
     }
     .stMarkdown {
         line-height: 1.6;
         color: #34495e;
+    }
+    .card {
+        background-color: #ffffff;
+        border-radius: 10px;
+        padding: 20px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        margin-bottom: 20px;
+    }
+    .footer {
+        text-align: center;
+        color: #6b7280;
+        font-size: 12px;
+        margin-top: 20px;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -333,99 +377,123 @@ st.markdown("""
 st.title("SMILES Prediction with XGBoost and GIN")
 
 st.markdown("""
-This application uses an XGBoost model to classify SMILES (0 or 1) and a GIN model to predict pEC50 values for all valid SMILES. Results include the Applicability Domain (AD) with a threshold SDC = 7.019561595570336e-06, labeling predictions as "Reliable" or "Unreliable". Choose an input method below to provide SMILES data.
+This application utilizes an XGBoost model to classify SMILES strings (0 or 1) and a Graph Isomorphism Network (GIN) to predict pEC50 values for valid SMILES. Predictions are accompanied by an Applicability Domain (AD) assessment, with a threshold SDC = 7.019561595570336e-06, labeling results as "Reliable" or "Unreliable". Select an input method below to provide SMILES data.
 """, unsafe_allow_html=True)
 
 # Input Method Selection
-st.subheader("Select Input Method")
-input_type = st.radio("", ("Manual Input", "Upload CSV"), label_visibility="collapsed")
+with st.container():
+    st.subheader("Select Input Method")
+    input_type = st.radio("", ("Manual Input", "Upload CSV"), label_visibility="collapsed", horizontal=True)
 
 # Input Section
 if input_type == "Manual Input":
-    st.subheader("Enter SMILES")
-    smiles_input = st.text_area("Input SMILES (one per line):", height=200, placeholder="e.g., CC(=O)OC1=CC=CC=C1C(=O)O")
-    smiles_list = [s.strip() for s in smiles_input.split('\n') if s.strip()]
+    with st.container():
+        st.subheader("Enter SMILES")
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            smiles_input = st.text_area(
+                "Input SMILES (one per line):",
+                height=200,
+                placeholder="e.g., CC(=O)OC1=CC=CC=C1C(=O)O",
+                key="smiles_input"
+            )
+        with col2:
+            st.markdown("<br><br>", unsafe_allow_html=True)  # Spacer for alignment
+            if st.button("Generate Example", key="example_button", help="Generate a valid SMILES example"):
+                example_smiles = generate_example_smiles()
+                st.session_state['smiles_input'] = example_smiles
+                st.rerun()
+        smiles_list = [s.strip() for s in smiles_input.split('\n') if s.strip()]
 else:
-    st.subheader("Upload CSV File")
-    column_name = st.text_input("Column name containing SMILES:", "SMILES", placeholder="e.g., SMILES")
-    uploaded_file = st.file_uploader("Choose a CSV file", type="csv")
-    if uploaded_file:
-        df = pd.read_csv(uploaded_file)
-        if column_name in df.columns:
-            smiles_list = df[column_name].tolist()
+    with st.container():
+        st.subheader("Upload CSV File")
+        col1, col2 = st.columns([2, 2])
+        with col1:
+            column_name = st.text_input("Column name containing SMILES:", "SMILES", placeholder="e.g., SMILES")
+        with col2:
+            uploaded_file = st.file_uploader("Choose a CSV file", type="csv")
+        if uploaded_file:
+            df = pd.read_csv(uploaded_file)
+            if column_name in df.columns:
+                smiles_list = df[column_name].tolist()
+            else:
+                st.error(f"Column '{column_name}' not found in the CSV file.")
+                st.stop()
         else:
-            st.error(f"Column '{column_name}' not found in the CSV file.")
-            st.stop()
-    else:
-        smiles_list = []
+            smiles_list = []
 
 # Predict Button
-if st.button("Run Prediction"):
-    if not smiles_list:
-        st.warning("Please provide SMILES input.")
-    else:
-        with st.spinner("Standardizing SMILES..."):
-            standardized_smiles = standardize_smiles(smiles_list)
-
-        # Classify valid and invalid SMILES
-        valid_pairs = [(orig, std) for orig, std in zip(smiles_list, standardized_smiles) if std is not None]
-        invalid_smiles = [smiles_list[i] for i, smi in enumerate(standardized_smiles) if smi is None]
-
-        if invalid_smiles:
-            st.error("The following SMILES are invalid and cannot be processed:")
-            for smi in invalid_smiles:
-                st.write(f"- {smi}")
-
-        if not valid_pairs:
-            st.error("All input SMILES are invalid. Prediction cannot be performed.")
+with st.container():
+    if st.button("Run Prediction", key="predict_button"):
+        if not smiles_list:
+            st.warning("Please provide SMILES input.")
         else:
-            valid_orig, valid_std = zip(*valid_pairs)
+            with st.spinner("Standardizing SMILES..."):
+                standardized_smiles = standardize_smiles(smiles_list)
 
-            # Classification prediction with XGBoost
-            with st.spinner("Performing classification with XGBoost..."):
-                xgb_features = [smiles_to_features(smi) for smi in valid_std]
-                xgb_model = load_xgb_model()
-                xgb_predictions = xgb_model.predict(np.array(xgb_features))
+            # Classify valid and invalid SMILES
+            valid_pairs = [(orig, std) for orig, std in zip(smiles_list, standardized_smiles) if std is not None]
+            invalid_smiles = [smiles_list[i] for i, smi in enumerate(standardized_smiles) if smi is None]
 
-            # Calculate SDC for Applicability Domain
-            with st.spinner("Calculating Applicability Domain (SDC)..."):
-                ad_model = load_ad_model()
-                sdc_scores = [ad_model.get_score(smi) for smi in valid_std]
-                ad_labels = ["Reliable" if score >= 7.019561595570336e-06 else "Unreliable" for score in sdc_scores]
+            if invalid_smiles:
+                st.error("The following SMILES are invalid and cannot be processed:")
+                for smi in invalid_smiles:
+                    st.write(f"- {smi}")
 
-            # pEC50 prediction with GIN for all valid SMILES
-            with st.spinner("Converting to graph data for GIN..."):
-                dataset = MyDataset(valid_std)
-                dataloader = DataLoader(dataset, batch_size=32, shuffle=False)
+            if not valid_pairs:
+                st.error("All input SMILES are invalid. Prediction cannot be performed.")
+            else:
+                valid_orig, valid_std = zip(*valid_pairs)
 
-            with st.spinner("Performing pEC50 prediction with GIN..."):
-                gin_model = load_gin_model()
-                gin_predictions = []
-                for batch in dataloader:
-                    batch = batch.to(device)
-                    with torch.no_grad():
-                        pred = gin_model(batch.x, batch.edge_index, batch.edge_attr, batch.batch)
-                    gin_predictions.extend(pred.cpu().numpy().flatten())
+                # Classification prediction with XGBoost
+                with st.spinner("Performing classification with XGBoost..."):
+                    xgb_features = [smiles_to_features(smi) for smi in valid_std]
+                    xgb_model = load_xgb_model()
+                    xgb_predictions = xgb_model.predict(np.array(xgb_features))
 
-            # Create results DataFrame
-            result_df = pd.DataFrame({
-                'Original SMILES': valid_orig,
-                'Standardized SMILES': valid_std,
-                'XGBoost Prediction': xgb_predictions,
-                'pEC50 Prediction (GIN)': gin_predictions,
-                'Applicability Domain': ad_labels
-            })
+                # Calculate SDC for Applicability Domain
+                with st.spinner("Calculating Applicability Domain (SDC)..."):
+                    ad_model = load_ad_model()
+                    sdc_scores = [ad_model.get_score(smi) for smi in valid_std]
+                    ad_labels = ["Reliable" if score >= 7.019561595570336e-06 else "Unreliable" for score in sdc_scores]
 
-            # Display results
-            st.subheader("Prediction Results")
-            st.markdown("Results for all valid SMILES:")
-            st.dataframe(result_df)
+                # pEC50 prediction with GIN for all valid SMILES
+                with st.spinner("Converting to graph data for GIN..."):
+                    dataset = MyDataset(valid_std)
+                    dataloader = DataLoader(dataset, batch_size=32, shuffle=False)
 
-            # Download results button
-            csv = result_df.to_csv(index=False)
-            st.download_button(
-                label="Download Results as CSV",
-                data=csv,
-                file_name="predictions.csv",
-                mime="text/csv"
-            )
+                with st.spinner("Performing pEC50 prediction with GIN..."):
+                    gin_model = load_gin_model()
+                    gin_predictions = []
+                    for batch in dataloader:
+                        batch = batch.to(device)
+                        with torch.no_grad():
+                            pred = gin_model(batch.x, batch.edge_index, batch.edge_attr, batch.batch)
+                        gin_predictions.extend(pred.cpu().numpy().flatten())
+
+                # Create results DataFrame
+                result_df = pd.DataFrame({
+                    'Original SMILES': valid_orig,
+                    'Standardized SMILES': valid_std,
+                    'XGBoost Prediction': xgb_predictions,
+                    'pEC50 Prediction (GIN)': gin_predictions,
+                    'Applicability Domain': ad_labels
+                })
+
+                # Display results
+                with st.container():
+                    st.subheader("Prediction Results")
+                    st.markdown("Results for all valid SMILES:")
+                    st.dataframe(result_df, use_container_width=True)
+
+                    # Download results button
+                    csv = result_df.to_csv(index=False)
+                    st.download_button(
+                        label="Download Results as CSV",
+                        data=csv,
+                        file_name="predictions.csv",
+                        mime="text/csv"
+                    )
+
+# Footer
+st.markdown('<div class="footer">Powered by Streamlit | Designed for Scientific Research</div>', unsafe_allow_html=True)
