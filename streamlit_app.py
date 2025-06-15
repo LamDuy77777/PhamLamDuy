@@ -112,7 +112,7 @@ def load_xgb_model():
 @st.cache_resource
 def load_gin_model():
     model = MyGIN().to(device)
-    with open('gin_model.pkl', 'rb') as f:
+    with open('GIN_597_562_cpu.pkl', 'rb') as f:
         state_dict = torch.load(f, map_location=device)
     model.load_state_dict(state_dict)
     model.eval()
