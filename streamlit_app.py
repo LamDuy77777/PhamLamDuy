@@ -272,9 +272,7 @@ class MyDataset(Dataset):
 st.title("Dự đoán với Mô hình XGBoost và GIN (bao gồm Miền Ứng dụng)")
 
 st.write("""
-Ứng dụng này sử dụng mô hình XGBoost để phân loại SMILES (0 hoặc 1) và mô hình GIN để dự đoán giá trị pEC50 cho tất cả SMILES hợp lệ.
-Kết quả bao gồm miền ứng dụng (AD) với ngưỡng SDC = 7.019561595570336e-06, phân loại dự đoán là "Reliable" hoặc "Unreliable".
-Bạn có thể nhập SMILES thủ công hoặc tải lên tệp CSV chứa SMILES.
+Ứng dụng này dùng để dự đoán chất chủ vận thụ thể apelin.
 """)
 
 # Phần nhập liệu
