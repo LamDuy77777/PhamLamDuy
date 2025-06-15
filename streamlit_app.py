@@ -1,16 +1,40 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-from rdkit import Chem, DataStructs
+from rdkit import Chem
 from rdkit.Chem import AllChem
 from rdkit.Chem.MolStandardize import rdMolStandardize
 from rdkit import RDLogger
 from tqdm import tqdm
 import pickle
 import xgboost as xgb
+import torch
+from torch_geometric.data import Data, Dataset, DataLoader
+from chemprop.featurizers.atom import MultiHotAtomFeaturizer
+from chemprop.featurizers.bond import MultiHotBondFeaturizer
+import torch.nn as nn
+import torch.nn.functional as F
+from torch_geometric.nn import GINEConv, global_add_pool, global_mean_pool, global_max_pool
+import random
+from rdkit import DataStructs
+
+# Thiết lập seed để đảm bảo tính tái lặp
+def set_seed(seed):
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    np.random.seed(seed)
+    random.seed(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+
+SEED = 42
+set_seed(SEED)
 
 # Tắt thông báo lỗi từ RDKit
 RDLogger.DisableLog('rdApp.*')
+
+# Định nghĩa device
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 # Hàm chuẩn hóa SMILES
 def standardize_smiles(batch):
@@ -41,7 +65,7 @@ def standardize_smiles(batch):
             standardized_list.append(None)
     return standardized_list
 
-# Hàm chuyển đổi SMILES thành đặc trưng (Morgan fingerprint)
+# Hàm chuyển đổi SMILES thành đặc trưng Morgan fingerprint cho XGBoost
 def smiles_to_features(smiles):
     mol = Chem.MolFromSmiles(smiles)
     if mol:
@@ -50,7 +74,7 @@ def smiles_to_features(smiles):
     else:
         return np.zeros(2048)
 
-# Hàm chuyển đổi SMILES thành ECFP4
+# Hàm chuyển đổi SMILES thành ECFP4 cho AD
 def smiles_to_ecfp4(smiles, radius=2, nBits=2048):
     mol = Chem.MolFromSmiles(smiles)
     if mol is None:
@@ -71,18 +95,17 @@ class AD:
         self.train_fps = None
 
     def fit(self):
+        # Tạo dấu vân tay ECFP4 cho tập huấn luyện
         self.train_fps = []
-        invalid_smiles = []
         for smiles in tqdm(self.train_data, desc="Processing training SMILES"):
             fp = smiles_to_ecfp4(smiles, self.radius, self.nBits)
             if fp is not None:
                 self.train_fps.append(fp)
             else:
-                invalid_smiles.append(smiles)
-        if invalid_smiles:
-            st.write(f"Found {len(invalid_smiles)} invalid SMILES in training data: {invalid_smiles}")
+                st.write(f"Invalid SMILES in training data: {smiles}")
 
     def get_score(self, smiles):
+        # Tính điểm SDC
         test_fp = smiles_to_ecfp4(smiles, self.radius, self.nBits)
         if test_fp is None:
             return np.nan
@@ -95,113 +118,259 @@ class AD:
             sdc += np.exp(exponent)
         return sdc if sdc > 0 else np.nan
 
-# Hàm tính SDC cho tập huấn luyện bằng leave-one-out
-def calculate_sdc_loo(train_fps):
-    sdc_loo = []
-    for i in tqdm(range(len(train_fps)), desc="Calculating leave-one-out SDC"):
-        test_fp = train_fps[i]
-        other_fps = train_fps[:i] + train_fps[i+1:]
-        sdc = 0.0
-        for train_fp in other_fps:
-            td = tanimoto_distance(test_fp, train_fp)
-            if td >= 1:
-                continue
-            exponent = -3 * td / (1 - td)
-            sdc += np.exp(exponent)
-        sdc_loo.append(sdc if sdc > 0 else np.nan)
-    return sdc_loo
+# Định nghĩa lớp MyConv cho GIN
+class MyConv(nn.Module):
+    def __init__(self, node_dim, edge_dim, dropout_p, arch='GIN', mlp_layers=1):
+        super().__init__()
+        if arch == 'GIN':
+            h = nn.Sequential()
+            for _ in range(mlp_layers - 1):
+                h.append(nn.Linear(node_dim, node_dim))
+                h.append(nn.ReLU())
+            h.append(nn.Linear(node_dim, node_dim))
+            self.gine_conv = GINEConv(h, edge_dim=edge_dim)
+            self.batch_norm = nn.BatchNorm1d(node_dim)
+            self.dropout = nn.Dropout(p=dropout_p)
+
+    def forward(self, x, edge_index, edge_attr):
+        x = self.gine_conv(x, edge_index, edge_attr)
+        x = self.batch_norm(x)
+        x = F.relu(x)
+        x = self.dropout(x)
+        return x
+
+# Định nghĩa lớp MyGNN
+class MyGNN(nn.Module):
+    def __init__(self, node_dim, edge_dim, dropout_p, arch='GIN', num_layers=3, mlp_layers=1):
+        super().__init__()
+        self.convs = nn.ModuleList(
+            [MyConv(node_dim, edge_dim, dropout_p=dropout_p, arch=arch, mlp_layers=mlp_layers)
+             for _ in range(num_layers)]
+        )
+
+    def forward(self, x, edge_index, edge_attr):
+        for conv in self.convs:
+            x = conv(x, edge_index, edge_attr)
+        return x
+
+# Định nghĩa lớp MyFinalNetwork
+class MyFinalNetwork(nn.Module):
+    def __init__(self, node_dim, edge_dim, arch, num_layers, dropout_mlp, dropout_gin, embedding_dim, mlp_layers, pooling_method):
+        super().__init__()
+        node_dim = (node_dim - 1) + 118 + 1
+        edge_dim = (node_dim - 1) + 21 + 1
+        self.gnn = MyGNN(node_dim, edge_dim, dropout_p=dropout_gin, arch=arch, num_layers=num_layers, mlp_layers=mlp_layers)
+
+        if pooling_method == 'add':
+            self.pooling_fn = global_add_pool
+        elif pooling_method == 'mean':
+            self.pooling_fn = global_mean_pool
+        elif pooling_method == 'max':
+            self.pooling_fn = global_max_pool
+        else:
+            raise ValueError("Phương pháp pooling không hợp lệ")
+
+        self.head = nn.Sequential(
+            nn.BatchNorm1d(node_dim),
+            nn.Dropout(p=dropout_mlp),
+            nn.Linear(node_dim, embedding_dim),
+            nn.ReLU(),
+            nn.BatchNorm1d(embedding_dim),
+            nn.Dropout(p=dropout_mlp),
+            nn.Linear(embedding_dim, 1)
+        )
+
+    def forward(self, x, edge_index, edge_attr, batch):
+        x0 = F.one_hot(x[:, 0].to(torch.int64), num_classes=118+1).float()
+        edge_attr0 = F.one_hot(edge_attr[:, 0].to(torch.int64), num_classes=21+1).float()
+        x = torch.cat([x0, x[:, 1:]], dim=1)
+        edge_attr = torch.cat([edge_attr0, edge_attr[:, 1:]], dim=1)
+
+        node_out = self.gnn(x, edge_index, edge_attr)
+        graph_out = self.pooling_fn(node_out, batch)
+        return self.head(graph_out)
 
 # Tải mô hình XGBoost
 @st.cache_resource
-def load_model():
+def load_xgb_model():
     with open('xgboost_binary_10nM.pkl', 'rb') as f:
         model = pickle.load(f)
     return model
 
-# Giao diện ứng dụng
-st.title("Dự đoán với Mô hình XGBoost và Đánh giá Miền Ứng Dụng")
+# Tải mô hình GIN
+@st.cache_resource
+def load_gin_model():
+    node_dim = 72
+    edge_dim = 14
+    best_params = {
+        'embedding_dim': 256,
+        'num_layer': 7,
+        'dropout_mlp': 0.28210247642451436,
+        'dropout_gin': 0.12555795277599677,
+        'mlp_layers': 2,
+        'pooling_method': 'mean'
+    }
+    model = MyFinalNetwork(
+        node_dim=node_dim,
+        edge_dim=edge_dim,
+        arch='GIN',
+        num_layers=best_params['num_layer'],
+        dropout_mlp=best_params['dropout_mlp'],
+        dropout_gin=best_params['dropout_gin'],
+        embedding_dim=best_params['embedding_dim'],
+        mlp_layers=best_params['mlp_layers'],
+        pooling_method=best_params['pooling_method']
+    ).to(device)
+    with open('GIN_597_562_cpu.pkl', 'rb') as f:
+        state_dict = torch.load(f, map_location=device)
+    model.load_state_dict(state_dict)
+    model.eval()
+    return model
 
-# Tải tập huấn luyện
-train_file = st.file_uploader("Tải lên file CSV chứa tập huấn luyện (cột 'standardized' và 'Target1')", type=["csv"])
-if train_file:
-    data_train = pd.read_csv(train_file)
-    data_train = data_train.drop_duplicates(subset=['standardized'])
-    st.write(f"Số SMILES trong tập huấn luyện sau khi loại bỏ trùng lặp: {len(data_train)}")
-
-    # Khởi tạo và fit lớp AD
-    ad = AD(train_data=data_train['standardized'].to_list())
+# Tải và khởi tạo AD
+@st.cache_resource
+def load_ad_model():
+    # Giả định tập huấn luyện nằm trong file train_data.csv
+    train_df = pd.read_csv('train_data.csv')
+    train_smiles = train_df['standardized'].drop_duplicates().tolist()
+    ad = AD(train_data=train_smiles)
     ad.fit()
+    return ad
 
-    # Tính SDC cho tập huấn luyện bằng leave-one-out
-    train_fps = [smiles_to_ecfp4(s) for s in data_train['standardized'] if smiles_to_ecfp4(s) is not None]
-    sdc_loo = calculate_sdc_loo(train_fps)
-    sdc_loo = [s for s in sdc_loo if not np.isnan(s)]  # Loại bỏ NaN
+# Hàm chuyển SMILES thành dữ liệu PyTorch Geometric cho GIN
+featurizer = MultiHotAtomFeaturizer.v2()
+featurizer_bond = MultiHotBondFeaturizer()
 
-    # Chọn ngưỡng SDC: giá trị nhỏ nhất trên tập huấn luyện
-    sdc_threshold = np.min(sdc_loo)
-    st.write(f"Ngưỡng SDC được chọn: {sdc_threshold}")
+def smi_to_pyg(smi, y=None):
+    mol = Chem.MolFromSmiles(smi)
+    if mol is None:
+        return None
+    id_pairs = ((b.GetBeginAtomIdx(), b.GetEndAtomIdx()) for b in mol.GetBonds())
+    atom_pairs = [z for (i, j) in id_pairs for z in ((i, j), (j, i))]
+    bonds = (mol.GetBondBetweenAtoms(i, j) for (i, j) in atom_pairs)
+    atom_features = [featurizer(a) for a in mol.GetAtoms()]
+    bond_features = [featurizer_bond(b) for b in bonds]
+    data = Data(
+        edge_index=torch.LongTensor(list(zip(*atom_pairs))),
+        x=torch.FloatTensor(atom_features),
+        edge_attr=torch.FloatTensor(bond_features),
+        mol=mol,
+        smiles=smi
+    )
+    if y is not None:
+        data.y = torch.FloatTensor([[y]])
+    return data
 
-# Chọn cách nhập SMILES cho dự đoán
-input_method = st.radio("Chọn cách nhập SMILES cho dự đoán:", ("Nhập thủ công", "Tải lên file CSV"))
+# Định nghĩa lớp Dataset cho GIN
+class MyDataset(Dataset):
+    def __init__(self, standardized):
+        mols = [smi_to_pyg(smi, y=None) for smi in tqdm(standardized, total=len(standardized))]
+        self.X = [m for m in mols if m]
+    def __getitem__(self, idx):
+        return self.X[idx]
+    def __len__(self):
+        return len(self.X)
 
-if input_method == "Nhập thủ công":
-    smiles_input = st.text_area("Nhập SMILES (mỗi SMILES trên một dòng):")
-    if st.button("Dự đoán") and smiles_input:
-        smiles_list = smiles_input.split('\n')
-        standardized_smiles = standardize_smiles(smiles_list)
-        
-        # Lọc SMILES hợp lệ
-        valid_smiles = [smi for smi in standardized_smiles if smi is not None]
-        if valid_smiles:
-            # Chuyển đổi SMILES thành đặc trưng
-            features = [smiles_to_features(smi) for smi in valid_smiles]
-            model = load_model()
-            predictions = model.predict(np.array(features))
-            
-            # Tính SDC cho các SMILES hợp lệ
-            sdc_scores = [ad.get_score(smi) for smi in valid_smiles]
-            within_ad = [1 if score >= sdc_threshold else 0 for score in sdc_scores]
-            applicability_domain = ["Reliable" if x else "Unreliable" for x in within_ad]
-            
-            # Tạo DataFrame cho kết quả
-            result_df = pd.DataFrame({
-                'SMILES đã chuẩn hóa': valid_smiles,
-                'Dự đoán': predictions,
-                'SDC': sdc_scores,
-                'Applicability_Domain': applicability_domain
-            })
-            st.write("Kết quả dự đoán:", result_df)
-        else:
-            st.write("Không có SMILES hợp lệ để dự đoán.")
+# Giao diện Streamlit
+st.title("Dự đoán với Mô hình XGBoost và GIN (bao gồm Miền Ứng dụng)")
 
+st.write("""
+Ứng dụng này sử dụng mô hình XGBoost để phân loại SMILES (0 hoặc 1) và mô hình GIN để dự đoán giá trị pEC50 cho các SMILES được phân loại là 1.
+Kết quả bao gồm miền ứng dụng (AD) với ngưỡng SDC = 7.019561595570336e-06, phân loại dự đoán là "Reliable" hoặc "Unreliable".
+Bạn có thể nhập SMILES thủ công hoặc tải lên tệp CSV chứa SMILES.
+""")
+
+# Phần nhập liệu
+input_type = st.radio("Chọn kiểu nhập liệu:", ("Nhập thủ công", "Tải lên CSV"))
+
+if input_type == "Nhập thủ công":
+    smiles_input = st.text_area("Nhập SMILES (mỗi dòng một SMILES):")
+    smiles_list = [s.strip() for s in smiles_input.split('\n') if s.strip()]
 else:
-    uploaded_file = st.file_uploader("data_AD_classification_streamlit", type=["csv"])
-    if uploaded_file and st.button("Dự đoán"):
+    column_name = st.text_input("Nhập tên cột chứa SMILES trong CSV:", "SMILES")
+    uploaded_file = st.file_uploader("Tải lên tệp CSV", type="csv")
+    if uploaded_file:
         df = pd.read_csv(uploaded_file)
-        if 'SMILES' in df.columns:
-            smiles_list = df['SMILES'].tolist()
-            standardized_smiles = standardize_smiles(smiles_list)
-            df['Standardized_SMILES'] = standardized_smiles
-            
-            # Lọc SMILES hợp lệ
-            valid_indices = [i for i, smi in enumerate(standardized_smiles) if smi is not None]
-            if valid_indices:
-                valid_smiles = [standardized_smiles[i] for i in valid_indices]
-                features = [smiles_to_features(smi) for smi in valid_smiles]
-                model = load_model()
-                predictions = model.predict(np.array(features))
-                
-                # Tính SDC cho các SMILES hợp lệ
-                sdc_scores = [ad.get_score(smi) for smi in valid_smiles]
-                within_ad = [1 if score >= sdc_threshold else 0 for score in sdc_scores]
-                applicability_domain = ["Reliable" if x else "Unreliable" for x in within_ad]
-                
-                # Thêm cột dự đoán và AD vào DataFrame
-                df.loc[valid_indices, 'Prediction'] = predictions
-                df.loc[valid_indices, 'SDC'] = sdc_scores
-                df.loc[valid_indices, 'Applicability_Domain'] = applicability_domain
-                st.write("Dữ liệu với dự đoán và đánh giá AD:", df[['SMILES', 'Standardized_SMILES', 'Prediction', 'SDC', 'Applicability_Domain']])
-            else:
-                st.write("Không có SMILES hợp lệ để dự đoán.")
+        if column_name in df.columns:
+            smiles_list = df[column_name].tolist()
         else:
-            st.write("File CSV phải chứa cột 'SMILES'")
+            st.error(f"Không tìm thấy cột '{column_name}' trong tệp CSV.")
+            st.stop()
+
+# Nút dự đoán
+if st.button("Dự đoán"):
+    if not smiles_list:
+        st.write("Vui lòng cung cấp đầu vào SMILES.")
+    else:
+        with st.spinner("Đang chuẩn hóa SMILES..."):
+            standardized_smiles = standardize_smiles(smiles_list)
+
+        # Phân loại SMILES hợp lệ và không hợp lệ
+        valid_pairs = [(orig, std) for orig, std in zip(smiles_list, standardized_smiles) if std is not None]
+        invalid_smiles = [smiles_list[i] for i, smi in enumerate(standardized_smiles) if smi is None]
+
+        if invalid_smiles:
+            st.write("Các SMILES sau không hợp lệ và không thể xử lý:")
+            for smi in invalid_smiles:
+                st.write(smi)
+
+        if not valid_pairs:
+            st.write("Tất cả SMILES đầu vào không hợp lệ. Không thể thực hiện dự đoán.")
+        else:
+            valid_orig, valid_std = zip(*valid_pairs)
+
+            # Dự đoán phân loại với XGBoost
+            with st.spinner("Đang thực hiện dự đoán phân loại với XGBoost..."):
+                xgb_features = [smiles_to_features(smi) for smi in valid_std]
+                xgb_model = load_xgb_model()
+                xgb_predictions = xgb_model.predict(np.array(xgb_features))
+
+            # Tính toán SDC cho AD
+            with st.spinner("Đang tính toán miền ứng dụng (SDC)..."):
+                ad_model = load_ad_model()
+                sdc_scores = [ad_model.get_score(smi) for smi in valid_std]
+                ad_labels = ["Reliable" if score >= 7.019561595570336e-06 else "Unreliable" for score in sdc_scores]
+
+            # Lọc các SMILES được XGBoost phân loại là 1
+            classified_as_1 = [(orig, std, ad) for (orig, std, ad), pred in zip(zip(valid_orig, valid_std, ad_labels), xgb_predictions) if pred == 1]
+
+            if classified_as_1:
+                orig_as_1, std_as_1, ad_as_1 = zip(*classified_as_1)
+
+                # Dự đoán pEC50 với GIN cho các SMILES phân loại là 1
+                with st.spinner("Đang chuyển đổi thành dữ liệu đồ thị cho GIN..."):
+                    dataset = MyDataset(std_as_1)
+                    dataloader = DataLoader(dataset, batch_size=32, shuffle=False)
+
+                with st.spinner("Đang thực hiện dự đoán pEC50 với GIN..."):
+                    gin_model = load_gin_model()
+                    gin_predictions = []
+                    for batch in dataloader:
+                        batch = batch.to(device)
+                        with torch.no_grad():
+                            pred = gin_model(batch.x, batch.edge_index, batch.edge_attr, batch.batch)
+                        gin_predictions.extend(pred.cpu().numpy().flatten())
+
+                # Tạo DataFrame kết quả
+                result_df = pd.DataFrame({
+                    'SMILES gốc': orig_as_1,
+                    'SMILES chuẩn hóa': std_as_1,
+                    'Dự đoán XGBoost': [1] * len(orig_as_1),
+                    'Dự đoán pEC50 (GIN)': gin_predictions,
+                    'Applicability Domain': ad_as_1
+                })
+
+                # Hiển thị kết quả
+                st.write("Kết quả dự đoán (chỉ các chất được phân loại là 1):")
+                st.dataframe(result_df)
+
+                # Nút tải xuống kết quả
+                csv = result_df.to_csv(index=False)
+                st.download_button(
+                    label="Tải xuống kết quả dưới dạng CSV",
+                    data=csv,
+                    file_name="du_doan.csv",
+                    mime="text/csv"
+                )
+            else:
+                st.write("Không có SMILES nào được dự đoán là 1 bởi mô hình XGBoost.")
