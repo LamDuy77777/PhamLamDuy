@@ -130,8 +130,8 @@ def load_model():
         mlp_layers=best_params['mlp_layers'],
         pooling_method=best_params['pooling_method']
     ).to(device)
-    with open('GIN_597_562 (1).pkl', 'rb') as f:
-        state_dict = pickle.load(f)
+    # Sử dụng torch.load với map_location để đảm bảo tải đúng thiết bị
+    state_dict = torch.load('GIN_597_562 (1).pkl', map_location=device)
     model.load_state_dict(state_dict)
     model.eval()
     return model
